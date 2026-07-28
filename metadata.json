@@ -1,0 +1,6 @@
+{
+  "name": "NexuxHR",
+  "description": "Smart HR Management for Modern Teams",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
