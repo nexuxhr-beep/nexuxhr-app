@@ -19,7 +19,8 @@ interface InviteModalProps {
  * (Login and signup now live on the dedicated LoginPage.)
  */
 export const InviteModal: React.FC<InviteModalProps> = ({ onClose }) => {
-  const { invitations, createInvitation } = useHR();
+  const { invitations, createInvitation, deleteInvitationAction, currentUser } = useHR();
+  const canInviteHr = currentUser.role === 'admin';
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('team_member');
@@ -97,8 +98,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ onClose }) => {
                 className="w-full px-3 py-2 rounded-xl glass-input text-slate-900"
               >
                 <option value="team_member">Team Member (Employee)</option>
-                <option value="hr_manager">HR Manager</option>
-                <option value="admin">Admin</option>
+                {canInviteHr && <option value="hr_manager">HR Manager</option>}
               </select>
             </div>
           </div>
@@ -138,9 +138,25 @@ export const InviteModal: React.FC<InviteModalProps> = ({ onClose }) => {
               <div key={inv.id} className="p-2.5 rounded-lg glass-card flex items-center justify-between text-[11px]">
                 <div>
                   <div className="font-bold text-slate-800">{inv.email}</div>
-                  <div className="text-slate-500">Emp ID: <span className="font-mono text-indigo-700">{inv.employeeId}</span> | Role: {inv.role}</div>
+                  <div className="text-slate-500">Role: {inv.role === 'hr_manager' ? 'HR Manager' : 'Team Member'} · Sent: {inv.createdAt}</div>
                 </div>
-                <span className="font-mono bg-indigo-50 border border-indigo-500/30 px-2 py-0.5 rounded text-indigo-700 font-bold">{inv.code}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    inv.status === 'Accepted' ? 'bg-emerald-500/20 text-emerald-700'
+                    : inv.status === 'Expired' ? 'bg-slate-400/20 text-slate-600'
+                    : 'bg-amber-500/20 text-amber-700'
+                  }`}>
+                    {inv.status}
+                  </span>
+                  {inv.status !== 'Accepted' && (
+                    <button
+                      onClick={() => deleteInvitationAction(inv.id)}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

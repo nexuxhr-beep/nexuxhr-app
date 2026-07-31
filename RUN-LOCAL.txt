@@ -1,0 +1,19 @@
+NexuxHR local run
+
+1. Extract this ZIP.
+2. Open the extracted folder in VS Code.
+3. Run:
+   npm install
+   npm run dev
+4. Open:
+   http://localhost:3000
+
+Frontend API:
+VITE_AUTH_API_URL=https://api.nexuxhr.com
+
+The cPanel backend must contain the supplied cpanel-api/index.php,
+cpanel-api/config.php and cpanel-api/.htaccess files.
+
+
+
+

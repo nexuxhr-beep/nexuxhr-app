@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useHR } from '../../context/HRContext';
 import { UserRole } from '../../types';
 import { Logo } from '../common/Logo';
+import { adToBs, formatBsNepali, formatNepaliTime, nepaliWeekday } from '../../lib/nepaliDate';
 import {
-  ShieldCheck,
-  Building2,
-  Users,
-  UserCheck,
   Bell,
+  Building2,
+  CheckCheck,
   Clock,
   LogOut,
-  User
+  ShieldCheck,
+  User,
+  UserCheck,
+  Users,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -19,81 +21,109 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenInviteModal, onLogout }) => {
-  const { currentUser, activeRole, notices } = useHR();
+  const {
+    currentUser,
+    activeRole,
+    notifications,
+    unreadNotificationCount,
+    setNotificationRead,
+    markAllNotificationsRead,
+  } = useHR();
   const [time, setTime] = useState(new Date());
-  const [showNoticesDropdown, setShowNoticesDropdown] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    const timer = window.setInterval(() => setTime(new Date()), 1000);
+    return () => window.clearInterval(timer);
   }, []);
 
+  const toggleNotifications = async () => {
+    const opening = !showNotifications;
+    setShowNotifications(opening);
+    if (opening && unreadNotificationCount > 0) {
+      try { await markAllNotificationsRead(); } catch { /* dropdown still opens */ }
+    }
+  };
+
   const roleBadges: Record<UserRole, { label: string; icon: React.ReactNode; color: string }> = {
-    superadmin: { label: 'Superadmin', icon: <ShieldCheck className="w-4 h-4" />, color: 'bg-purple-50 text-purple-700 border border-purple-500/30' },
-    admin: { label: 'Admin', icon: <Building2 className="w-4 h-4" />, color: 'bg-blue-50 text-blue-700 border border-blue-500/30' },
-    hr_manager: { label: 'HR Manager', icon: <Users className="w-4 h-4" />, color: 'bg-emerald-50 text-emerald-700 border border-emerald-500/30' },
-    team_member: { label: 'Team Member', icon: <UserCheck className="w-4 h-4" />, color: 'bg-amber-50 text-amber-700 border border-amber-500/30' },
+    superadmin: { label: 'Superadmin', icon: <ShieldCheck className="h-4 w-4" />, color: 'border-purple-200 bg-purple-50 text-purple-700' },
+    admin: { label: 'Admin', icon: <Building2 className="h-4 w-4" />, color: 'border-blue-200 bg-blue-50 text-blue-700' },
+    hr_manager: { label: 'HR Manager', icon: <Users className="h-4 w-4" />, color: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+    operation_manager: { label: 'Operation Manager', icon: <Users className="h-4 w-4" />, color: 'border-cyan-200 bg-cyan-50 text-cyan-700' },
+    accountant: { label: 'Accountant', icon: <Users className="h-4 w-4" />, color: 'border-rose-200 bg-rose-50 text-rose-700' },
+    team_member: { label: 'Team Member', icon: <UserCheck className="h-4 w-4" />, color: 'border-amber-200 bg-amber-50 text-amber-700' },
   };
 
   const currentRoleBadge = roleBadges[activeRole];
 
   return (
-    <header id="nexuxhr-app-header" className="sticky top-0 z-30 glass-header text-slate-900 shadow-xl">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-        
-        {/* Brand Logo & Slogan */}
+    <header id="nexuxhr-app-header" className="glass-header app-header-modern z-20 text-slate-900">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <Logo size="md" />
 
-        {/* Center Search / Clock */}
-        <div className="hidden md:flex items-center gap-6 glass-card px-4 py-1.5 rounded-xl border border-slate-900/10">
-          <div className="flex items-center gap-2 text-slate-600 font-mono text-xs">
-            <Clock className="w-4 h-4 text-indigo-400 animate-pulse" />
-            <span>{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-            <span className="text-xs text-slate-500">| {time.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+        <div className="glass-card hidden items-center gap-3 rounded-xl border border-slate-900/10 px-4 py-1.5 md:flex">
+          <Clock className="h-4 w-4 shrink-0 text-indigo-500" />
+          <div className="nx-nepali-datetime leading-tight">
+            <div className="text-[13px] font-semibold text-slate-800">
+              {formatBsNepali(adToBs(time))}
+            </div>
+            <div className="text-[11px] text-slate-500">
+              {nepaliWeekday(time)} &middot; {formatNepaliTime(time)}
+            </div>
+          </div>
+          <div className="ml-1 hidden border-l border-slate-900/10 pl-3 text-[10px] leading-tight text-slate-400 lg:block">
+            <div>{time.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+            <div>{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
           </div>
         </div>
 
-        {/* Right Action Bar */}
         <div className="flex items-center gap-3">
-          
-          {/* Current Role Badge (read-only — role comes from real sign-in, not a switch) */}
-          <div className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${currentRoleBadge.color}`}>
-            {currentRoleBadge.icon}
-            {currentRoleBadge.label}
+          <div className={`hidden items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold sm:flex ${currentRoleBadge.color}`}>
+            {currentRoleBadge.icon}{currentRoleBadge.label}
           </div>
 
-          {/* Notices Bell */}
           <div className="relative">
             <button
               id="notifications-button"
-              onClick={() => setShowNoticesDropdown(!showNoticesDropdown)}
-              className="p-2 rounded-xl glass-card text-slate-500 hover:text-slate-900 relative transition-all"
+              onClick={toggleNotifications}
+              className="glass-card relative rounded-xl p-2 text-slate-500 transition hover:text-slate-900"
+              aria-label="Open notifications"
             >
-              <Bell className="w-4 h-4" />
-              {notices.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center">
-                  {notices.length}
+              <Bell className="h-4 w-4" />
+              {unreadNotificationCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-black text-white">
+                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
                 </span>
               )}
             </button>
 
-            {showNoticesDropdown && (
-              <div className="absolute right-0 mt-2 w-80 glass-modal rounded-xl shadow-2xl p-3 z-50">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-900/10 mb-2">
-                  <h4 className="text-xs font-bold text-slate-800">Announcements ({notices.length})</h4>
+            {showNotifications && (
+              <div className="absolute right-0 z-50 mt-2 w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:w-[390px]">
+                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900">Notifications</h4>
+                    <p className="text-[10px] text-slate-500">Opening this panel marks current items as read.</p>
+                  </div>
+                  <CheckCheck className="h-4 w-4 text-emerald-600" />
                 </div>
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                  {notices.slice(0, 4).map(notice => (
-                    <div key={notice.id} className="p-2.5 rounded-lg bg-white/60 border border-slate-900/10 text-xs">
-                      <div className="flex items-center justify-between font-semibold text-slate-800">
-                        <span>{notice.title}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                          notice.priority === 'Urgent' ? 'bg-red-500/20 text-red-700' : 'bg-indigo-500/20 text-indigo-700'
-                        }`}>
-                          {notice.priority}
-                        </span>
+                <div className="max-h-[420px] overflow-y-auto p-2">
+                  {notifications.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-slate-400">No notifications yet.</div>
+                  ) : notifications.slice(0, 20).map(notification => (
+                    <div key={notification.id} className={`mb-2 rounded-xl border p-3 ${notification.isRead ? 'border-slate-200 bg-white' : 'border-indigo-200 bg-indigo-50'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-black text-slate-900">{notification.title}</div>
+                          <p className="mt-1 text-[11px] leading-relaxed text-slate-600">{notification.message}</p>
+                          <p className="mt-2 text-[9px] text-slate-400">{notification.createdAt}</p>
+                        </div>
+                        <button
+                          onClick={() => setNotificationRead(notification.id, !notification.isRead)}
+                          className="shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-[9px] font-bold text-slate-600 hover:bg-slate-50"
+                        >
+                          {notification.isRead ? 'Mark unread' : 'Mark read'}
+                        </button>
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{notice.content}</p>
                     </div>
                   ))}
                 </div>
@@ -101,49 +131,30 @@ export const Header: React.FC<HeaderProps> = ({ onOpenInviteModal, onLogout }) =
             )}
           </div>
 
-          {/* Invite Team Trigger — hidden for team members, who can't invite */}
-          {activeRole !== 'team_member' && (
-            <button
-              id="invite-team-btn"
-              onClick={onOpenInviteModal}
-              className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl glass-btn-primary text-white font-medium text-xs shadow-md transition-all"
-            >
-              <User className="w-3.5 h-3.5" />
-              <span>Invite Team</span>
+          {(activeRole === 'admin' || activeRole === 'hr_manager') && (
+            <button id="invite-team-btn" onClick={onOpenInviteModal} className="glass-btn-primary hidden items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-medium text-white shadow-md sm:flex">
+              <User className="h-3.5 w-3.5" /> Invite Team
             </button>
           )}
 
-          {/* Current User Avatar */}
-          <div className="flex items-center gap-2 pl-2 border-l border-slate-900/10">
+          <div className="flex items-center gap-2 border-l border-slate-900/10 pl-2">
             {currentUser.photoUrl ? (
-              <img
-                src={currentUser.photoUrl}
-                alt={currentUser.name}
-                className="w-9 h-9 rounded-xl object-cover border border-indigo-500/40 shadow-inner"
-              />
+              <img src={currentUser.photoUrl} alt={currentUser.name} className="h-9 w-9 rounded-xl border border-indigo-500/30 object-cover" />
             ) : (
-              <div className="w-9 h-9 rounded-xl bg-indigo-100 border border-indigo-500/30 flex items-center justify-center text-indigo-700 font-bold text-sm shrink-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-100 text-sm font-bold text-indigo-700">
                 {(currentUser.name || '?').trim().charAt(0).toUpperCase()}
               </div>
             )}
-            <div className="hidden xl:block text-left">
-              <div className="text-xs font-bold text-slate-800 truncate max-w-[120px]">{currentUser.name}</div>
-              <div className="text-[10px] text-slate-500 capitalize">{currentUser.designation || currentUser.role.replace('_', ' ')}</div>
+            <div className="hidden text-left xl:block">
+              <div className="max-w-[120px] truncate text-xs font-bold text-slate-800">{currentUser.name}</div>
+              <div className="text-[10px] capitalize text-slate-500">{currentUser.designation || currentUser.role.replace('_', ' ')}</div>
             </div>
           </div>
 
-          {/* Sign Out */}
-          <button
-            id="sign-out-btn"
-            onClick={onLogout}
-            title="Sign out"
-            className="p-2 rounded-xl glass-card text-slate-600 hover:text-red-700 hover:border-red-500/30 transition-all"
-          >
-            <LogOut className="w-4 h-4" />
+          <button id="sign-out-btn" onClick={onLogout} title="Sign out" className="glass-card rounded-xl p-2 text-slate-600 transition hover:text-red-700">
+            <LogOut className="h-4 w-4" />
           </button>
-
         </div>
-
       </div>
     </header>
   );

@@ -2,9 +2,8 @@ import React from 'react';
 import { useHR } from '../../context/HRContext';
 import {
   LayoutDashboard,
-  CheckSquare,
   CalendarCheck,
-  FileText,
+  Settings,
   Megaphone,
   HardDrive,
   User,
@@ -15,9 +14,10 @@ import {
   Briefcase,
   ShieldAlert,
   UserPlus,
-  HelpCircle,
-  FileBadge,
-  Sparkles
+  CalendarOff,
+  FileSignature,
+  Wallet,
+  Sparkles,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -42,28 +42,47 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       case 'admin':
         return [
           { id: 'home', label: 'Home Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-          { id: 'tasks', label: 'My Tasks & Kanban', icon: <CheckSquare className="w-4 h-4" /> },
-          { id: 'attendance_entry', label: 'Attendance Entry', icon: <CalendarCheck className="w-4 h-4" /> },
-          { id: 'leave_records', label: 'Leave Review & Records', icon: <FileText className="w-4 h-4" /> },
+          { id: 'attendance_management', label: 'Attendance Management', icon: <CalendarCheck className="w-4 h-4" /> },
+          { id: 'attendance_settings', label: 'Attendance Settings', icon: <Settings className="w-4 h-4" /> },
+          { id: 'office_expenses', label: 'Office Expenses', icon: <Wallet className="w-4 h-4" /> },
+          { id: 'requests', label: 'Employee Requests', icon: <CalendarOff className="w-4 h-4" /> },
           { id: 'notices', label: 'Upcoming Notices', icon: <Megaphone className="w-4 h-4" /> },
           { id: 'assets', label: 'Assets Register', icon: <HardDrive className="w-4 h-4" /> },
           { id: 'employees', label: 'Employee Details', icon: <Users className="w-4 h-4" /> },
           { id: 'positions', label: 'Position & Invites', icon: <UserPlus className="w-4 h-4" /> },
           { id: 'contracts', label: 'Contract Overview', icon: <Briefcase className="w-4 h-4" /> },
-          { id: 'reports', label: 'Report Generator', icon: <FileBadge className="w-4 h-4" /> },
+          { id: 'documents', label: 'HR Documents', icon: <FileSignature className="w-4 h-4" /> },
+          { id: 'audit_logs', label: 'Audit Logs', icon: <FileSpreadsheet className="w-4 h-4" /> },
           { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" /> },
         ];
 
       case 'hr_manager':
         return [
           { id: 'home', label: 'Home Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-          { id: 'tasks', label: 'My Tasks & Kanban', icon: <CheckSquare className="w-4 h-4" /> },
-          { id: 'attendance_entry', label: 'Attendance (This Month)', icon: <CalendarCheck className="w-4 h-4" /> },
-          { id: 'leave_records', label: 'Leave Records', icon: <FileText className="w-4 h-4" /> },
+          { id: 'attendance_management', label: 'Attendance Management', icon: <CalendarCheck className="w-4 h-4" /> },
+          { id: 'requests', label: 'Employee Requests', icon: <CalendarOff className="w-4 h-4" /> },
           { id: 'notices', label: 'Entry Upcoming Notices', icon: <Megaphone className="w-4 h-4" /> },
           { id: 'assets', label: 'Assets Register', icon: <HardDrive className="w-4 h-4" /> },
-          { id: 'hr_employee_entry', label: 'Entry Employee Details', icon: <Users className="w-4 h-4" /> },
-          { id: 'reports', label: 'Report Download', icon: <FileBadge className="w-4 h-4" /> },
+          { id: 'hr_employee_entry', label: 'Employee Profiles', icon: <Users className="w-4 h-4" /> },
+          { id: 'documents', label: 'HR Documents', icon: <FileSignature className="w-4 h-4" /> },
+          { id: 'audit_logs', label: 'Audit Logs', icon: <FileSpreadsheet className="w-4 h-4" /> },
+          { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" /> },
+        ];
+
+      // Operation manager: assets register + office expenses only, as specified.
+      case 'operation_manager':
+        return [
+          { id: 'home', label: 'Home Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+          { id: 'assets', label: 'Assets Register', icon: <HardDrive className="w-4 h-4" /> },
+          { id: 'office_expenses', label: 'Office Expenses', icon: <Wallet className="w-4 h-4" /> },
+          { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" /> },
+        ];
+
+      // Accountant: menu kept minimal until the scope is confirmed.
+      case 'accountant':
+        return [
+          { id: 'home', label: 'Home Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+          { id: 'office_expenses', label: 'Office Expenses', icon: <Wallet className="w-4 h-4" /> },
           { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" /> },
         ];
 
@@ -71,9 +90,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       default:
         return [
           { id: 'home', label: 'Home Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-          { id: 'tasks', label: 'My Tasks & Kanban', icon: <CheckSquare className="w-4 h-4" /> },
-          { id: 'my_attendance', label: 'My Attendance', icon: <CalendarCheck className="w-4 h-4" /> },
-          { id: 'requests', label: 'Requests & FAQs', icon: <HelpCircle className="w-4 h-4" /> },
+          { id: 'attendance_management', label: 'My Attendance', icon: <CalendarCheck className="w-4 h-4" /> },
+          { id: 'requests', label: 'Leave Request', icon: <CalendarOff className="w-4 h-4" /> },
           { id: 'notices', label: 'Upcoming Notices', icon: <Megaphone className="w-4 h-4" /> },
           { id: 'assets', label: 'Assets Register', icon: <HardDrive className="w-4 h-4" /> },
           { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" /> },
@@ -91,7 +109,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
           <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Current Role</div>
           <div className="text-sm font-extrabold text-indigo-400 capitalize mt-0.5 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-indigo-400" />
-            {activeRole.replace('_', ' ')}
+            {activeRole.replace(/_/g, ' ')}
           </div>
           <div className="text-xs text-slate-600 font-medium truncate mt-1">
             {currentUser.companyName || 'NexuxHR Organization'}
@@ -126,16 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
 
       {/* Footer Info Box */}
       <div className="pt-4 border-t border-slate-900/10 text-[11px] text-slate-500">
-        <div className="flex items-center justify-between">
-          <span>NexuxHR Platform</span>
-          <span className="text-emerald-400 font-mono flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Live Sync
-          </span>
-        </div>
-        <p className="text-[10px] text-slate-500 mt-1">
-          Firebase Auth & Local Persistence Active
-        </p>
+        <span>NexuxHR Platform</span>
       </div>
     </aside>
   );

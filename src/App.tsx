@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { HRProvider, useHR } from './context/HRContext';
-import { hasSession, logoutUser } from './lib/authApi';
+import { getCurrentUser, hasSession, logoutUser } from './lib/authApi';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { LoginPage } from './components/auth/LoginPage';
 import { InviteModal } from './components/auth/InviteModal';
+import { UrgentNoticeModal } from './components/common/UrgentNoticeModal';
 import { EmployeeDashboard } from './components/employee/EmployeeDashboard';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { HRManagerDashboard } from './components/hr/HRManagerDashboard';
 import { SuperadminDashboard } from './components/superadmin/SuperadminDashboard';
+import { OperationManagerDashboard, AccountantDashboard } from './components/roles/RoleDashboards';
+import { ProfileSetupWizard } from './components/auth/ProfileSetupWizard';
 
 const MainAppContent: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const { activeRole } = useHR();
@@ -32,6 +35,10 @@ const MainAppContent: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         return <AdminDashboard activeTab={activeTab} />;
       case 'hr_manager':
         return <HRManagerDashboard activeTab={activeTab} />;
+      case 'operation_manager':
+        return <OperationManagerDashboard activeTab={activeTab} />;
+      case 'accountant':
+        return <AccountantDashboard activeTab={activeTab} />;
       case 'team_member':
       default:
         return <EmployeeDashboard activeTab={activeTab} />;
@@ -57,24 +64,84 @@ const MainAppContent: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
       </div>
 
+      <footer className="app-footer"><span>NexuxHR</span></footer>
       {/* Invite Team Member Modal */}
       {showInviteModal && (
         <InviteModal onClose={() => setShowInviteModal(false)} />
       )}
+
+      {/* Urgent notices block the screen until acknowledged, on any tab. */}
+      <UrgentNoticeModal refreshKey={activeTab} />
 
     </div>
   );
 };
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => hasSession());
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  /** Undefined until the session is validated. False sends the user to onboarding. */
+  const [setupComplete, setSetupComplete] = useState<boolean | undefined>(undefined);
+
+  useEffect(() => {
+    let active = true;
+    const validate = async () => {
+      if (!hasSession()) {
+        if (active) { setIsAuthenticated(false); setCheckingSession(false); }
+        return;
+      }
+      try {
+        const session = await getCurrentUser();
+        if (active) {
+          setIsAuthenticated(true);
+          // Superadmin has no employee profile, so onboarding never applies.
+          const role = session.user?.role;
+          setSetupComplete(role === 'superadmin' ? true : session.user?.profileSetupComplete !== false);
+        }
+      } catch {
+        await logoutUser().catch(() => undefined);
+        if (active) setIsAuthenticated(false);
+      } finally {
+        if (active) setCheckingSession(false);
+      }
+    };
+    void validate();
+    return () => { active = false; };
+  }, []);
+
+  if (checkingSession) {
+    return <div className="session-check-screen"><div className="session-check-spinner" /><p>Checking secure session…</p></div>;
+  }
+
+  const handleLogout = () => {
+    void logoutUser();
+    setIsAuthenticated(false);
+    setSetupComplete(undefined);
+  };
+
+  const handleAuthenticated = async () => {
+    setIsAuthenticated(true);
+    try {
+      const session = await getCurrentUser();
+      const role = session.user?.role;
+      setSetupComplete(role === 'superadmin' ? true : session.user?.profileSetupComplete !== false);
+    } catch {
+      // If the check fails, let them in rather than trapping them in onboarding.
+      setSetupComplete(true);
+    }
+  };
 
   return (
     <HRProvider>
-      {isAuthenticated ? (
-        <MainAppContent onLogout={() => { void logoutUser(); setIsAuthenticated(false); }} />
+      {!isAuthenticated ? (
+        <LoginPage onAuthenticated={() => { void handleAuthenticated(); }} />
+      ) : setupComplete === false ? (
+        <ProfileSetupWizard
+          onComplete={() => setSetupComplete(true)}
+          onLogout={handleLogout}
+        />
       ) : (
-        <LoginPage onAuthenticated={() => setIsAuthenticated(true)} />
+        <MainAppContent onLogout={handleLogout} />
       )}
     </HRProvider>
   );

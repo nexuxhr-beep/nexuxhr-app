@@ -20,10 +20,8 @@ export const Logo: React.FC<LogoProps> = ({ size = 'md', showSubtitle = true }) 
 
   return (
     <div className="flex items-center gap-3 group select-none">
-      <div className={`relative ${iconSizes[size]} rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 p-[1px] shadow-md group-hover:shadow-lg transition-all duration-300 shrink-0`}>
-        <div className="w-full h-full bg-slate-950/90 backdrop-blur-md rounded-[11px] flex items-center justify-center relative overflow-hidden">
-          {/* Inner glass reflection sheen */}
-          <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-60 z-10" />
+      <div className={`relative ${iconSizes[size]} rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 p-[1.5px] shadow-md group-hover:shadow-lg transition-all duration-300 shrink-0`}>
+        <div className="w-full h-full bg-white rounded-[11px] flex items-center justify-center relative overflow-hidden">
           <img
             src="/nexuxhr-logo.png"
             alt="NexuxHR"

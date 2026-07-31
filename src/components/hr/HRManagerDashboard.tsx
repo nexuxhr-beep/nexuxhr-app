@@ -1,24 +1,27 @@
-import React, { useState } from 'react';
+import { AttendanceManagementPanel } from '../common/AttendanceManagementPanel';
+import { DocumentGeneratorPanel } from '../common/DocumentGeneratorPanel';
+import React, { useEffect, useState } from 'react';
 import { useHR } from '../../context/HRContext';
-import { KanbanTaskBoard } from '../common/KanbanTaskBoard';
-import { ReportGeneratorModal } from '../common/ReportGeneratorModal';
-import { DocumentUploader } from '../common/DocumentUploader';
+import { RequestManagementPanel } from '../common/RequestManagementPanel';
+import { EmployeeDirectoryPanel } from '../common/EmployeeDirectoryPanel';
+import { AuditLogPanel } from '../common/AuditLogPanel';
+import { EmployeeProfileForm } from '../common/EmployeeProfileForm';
+import { AddAssetModal } from '../admin/AddAssetModal';
+import { AssetDetailModal } from '../admin/AssetDetailModal';
+import { AssetRenewalCell } from '../common/AssetRenewalCell';
+import { UpcomingBirthdays } from '../common/UpcomingBirthdays';
+import { AttendanceInsights } from '../common/AttendanceInsights';
 import { UserProfile } from '../../types';
 import {
-  Clock,
+  AlertTriangle,
   CalendarCheck,
   CheckCircle2,
-  Users,
-  FileBadge,
-  Megaphone,
-  HardDrive,
-  User,
-  Plus,
-  Trash2,
+  Clock,
   FileText,
-  Save,
-  Building2,
-  UserPlus
+  HardDrive,
+  Megaphone,
+  User,
+  Users
 } from 'lucide-react';
 
 interface HRManagerDashboardProps {
@@ -41,14 +44,13 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
     updateCurrentUserProfile
   } = useHR();
 
-  const [showReportModal, setShowReportModal] = useState(false);
 
   // Employee Detail Entry State
   const [empName, setEmpName] = useState('');
-  const [empCode, setEmpCode] = useState('NX-009');
+  const [empCode, setEmpCode] = useState('');
   const [designation, setDesignation] = useState('');
-  const [department, setDepartment] = useState('Operations');
-  const [dob, setDob] = useState('1997-08-12');
+  const [department, setDepartment] = useState('');
+  const [dob, setDob] = useState('');
   const [citizenshipPan, setCitizenshipPan] = useState('');
   const [emergencyPhone, setEmergencyPhone] = useState('');
   const [guardianPhone, setGuardianPhone] = useState('');
@@ -56,9 +58,19 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Attendance Entry State
-  const [attEmpId, setAttEmpId] = useState(users[0]?.employeeId || users[0]?.id);
+  const [attEmpId, setAttEmpId] = useState('');
   const [attDate, setAttDate] = useState(new Date().toISOString().split('T')[0]);
   const [attStatus, setAttStatus] = useState<any>('Present');
+  const [attCheckIn, setAttCheckIn] = useState('');
+  const [attCheckOut, setAttCheckOut] = useState('');
+
+  const attendanceEmployees = users.filter(user => user.role !== 'superadmin' && user.isActive);
+
+  useEffect(() => {
+    if (!attEmpId && attendanceEmployees.length > 0) {
+      setAttEmpId(attendanceEmployees[0].id);
+    }
+  }, [attEmpId, attendanceEmployees]);
 
   // Notice Form State
   const [noticeTitle, setNoticeTitle] = useState('');
@@ -78,9 +90,9 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
       email: `${empName.toLowerCase().replace(/\s+/g, '.')}@nexuxhr.com`,
       name: empName,
       role: 'team_member',
-      employeeId: `EMP-2026-00${users.length + 1}`,
+      employeeId: empCode || undefined,
       employeeCode: empCode,
-      designation: designation || 'Operations Associate',
+      designation: designation || undefined,
       department,
       dob,
       citizenshipPan,
@@ -97,35 +109,51 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
-  const handleAddAttendance = (e: React.FormEvent) => {
+  const handleAddAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
-    const target = users.find(u => u.employeeId === attEmpId || u.id === attEmpId);
-    addAttendanceRecord({
-      employeeId: attEmpId,
-      employeeName: target ? target.name : 'Employee',
-      date: attDate,
-      month: thisMonthStr,
-      checkIn: '09:00:00',
-      checkOut: '17:30:00',
-      status: attStatus,
-      workHours: 8.5
-    });
-    alert('Attendance entered for this month!');
+    const target = attendanceEmployees.find(user => user.id === attEmpId);
+    if (!target) {
+      alert('Please select an active employee.');
+      return;
+    }
+
+    try {
+      await addAttendanceRecord({
+        employeeId: target.id,
+        employeeName: target.name,
+        date: attDate,
+        month: attDate.substring(0, 7),
+        checkIn: attCheckIn || undefined,
+        checkOut: attCheckOut || undefined,
+        status: attStatus
+      });
+      alert('Attendance saved successfully.');
+    } catch (error: any) {
+      alert(error?.message || 'Could not save attendance.');
+    }
   };
 
-  const handleAddNotice = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!noticeTitle.trim()) return;
-    addNotice({
-      title: noticeTitle,
-      content: noticeContent,
-      postedBy: currentUser.id,
-      postedByName: `${currentUser.name} (HR Manager)`,
-      priority: 'Important',
-      targetRole: 'All'
-    });
-    setNoticeTitle('');
-    setNoticeContent('');
+  const [noticeError, setNoticeError] = useState('');
+  const [showAddAssetModal, setShowAddAssetModal] = useState(false);
+  const [viewingAssetId, setViewingAssetId] = useState<string | null>(null);
+  /** Urgent notices force a blocking popup on every other user's screen. */
+  const publishNotice = async (priority: 'Normal' | 'Urgent') => {
+    if (!noticeTitle.trim() || !noticeContent.trim()) {
+      setNoticeError('Title and content are both required.');
+      return;
+    }
+    setNoticeError('');
+    try {
+      await addNotice({
+        title: noticeTitle,
+        content: noticeContent,
+        priority,
+      });
+      setNoticeTitle('');
+      setNoticeContent('');
+    } catch (err: any) {
+      setNoticeError(err.message || 'Could not post notice.');
+    }
   };
 
   return (
@@ -142,12 +170,6 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
               <h2 className="text-2xl font-black text-slate-900 mt-2">Human Resources Operations</h2>
               <p className="text-sm text-slate-600">Employee onboarding, attendance logs, verification documents, and appraisals</p>
             </div>
-            <button
-              onClick={() => setShowReportModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors text-xs shadow-lg flex items-center gap-2"
-            >
-              <FileBadge className="w-4 h-4" /> Download HR Reports
-            </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -175,11 +197,20 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
               <Users className="w-6 h-6 text-indigo-400" />
             </div>
           </div>
+
+          {/* Top 5 absent / present for the current Nepali month */}
+          <AttendanceInsights />
+
+          {/* Upcoming birthdays */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <UpcomingBirthdays />
+          </div>
         </div>
       )}
 
-      {/* 2. MY TASKS & KANBAN TAB */}
-      {activeTab === 'tasks' && <KanbanTaskBoard />}
+      {/* 2. MY TASK TAB */}
+
+      {activeTab === 'requests' && <RequestManagementPanel />}
 
       {/* 3. ATTENDANCE ENTRY (THIS MONTH ONLY) TAB */}
       {activeTab === 'attendance_entry' && (
@@ -188,7 +219,7 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
             <CalendarCheck className="w-5 h-5 text-indigo-400" /> Attendance Entry (This Month Only: {thisMonthStr})
           </h3>
 
-          <form onSubmit={handleAddAttendance} className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-100/60 p-4 rounded-xl border border-slate-200/60 text-xs">
+          <form onSubmit={handleAddAttendance} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 bg-slate-100/60 p-4 rounded-xl border border-slate-200/60 text-xs">
             <div>
               <label className="block text-slate-600 font-semibold mb-1">Employee</label>
               <select
@@ -196,9 +227,10 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
                 onChange={e => setAttEmpId(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg glass-input text-slate-900"
               >
-                {users.map(u => (
-                  <option key={u.id} value={u.employeeId || u.id}>
-                    {u.name} ({u.employeeId || 'NX-001'})
+                <option value="" disabled>Select employee</option>
+                {attendanceEmployees.map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} ({user.employeeCode || user.employeeId || `#${user.id}`})
                   </option>
                 ))}
               </select>
@@ -227,9 +259,33 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
               </select>
             </div>
 
+            <div>
+              <label className="block text-slate-600 font-semibold mb-1">Check In</label>
+              <input
+                type="time"
+                value={attCheckIn}
+                onChange={e => setAttCheckIn(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg glass-input text-slate-900 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-600 font-semibold mb-1">Check Out</label>
+              <input
+                type="time"
+                value={attCheckOut}
+                onChange={e => setAttCheckOut(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg glass-input text-slate-900 font-mono"
+              />
+            </div>
+
             <div className="flex items-end">
-              <button type="submit" className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors">
-                Record Monthly Entry
+              <button
+                type="submit"
+                disabled={!attEmpId || !attDate}
+                className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"
+              >
+                Save Entry
               </button>
             </div>
           </form>
@@ -265,7 +321,8 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
             <Megaphone className="w-5 h-5 text-indigo-400" /> Entry Upcoming Company Notice
           </h3>
 
-          <form onSubmit={handleAddNotice} className="space-y-3 text-xs bg-slate-100/60 p-4 rounded-xl border border-slate-200/60">
+          {noticeError && <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">{noticeError}</div>}
+          <form onSubmit={e => { e.preventDefault(); void publishNotice('Normal'); }} className="space-y-3 text-xs bg-slate-100/60 p-4 rounded-xl border border-slate-200/60">
             <div>
               <label className="block text-slate-600 font-semibold mb-1">Notice Title *</label>
               <input
@@ -289,9 +346,14 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
               />
             </div>
 
-            <button type="submit" className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold">
-              Broadcast Notice
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => publishNotice('Normal')} className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors">
+                Publish Notice
+              </button>
+              <button type="button" onClick={() => publishNotice('Urgent')} title="Shows a blocking popup on every employee's screen until they acknowledge it" className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold transition-colors flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" /> Publish as Urgent Notice
+              </button>
+            </div>
           </form>
         </div>
       )}
@@ -299,153 +361,94 @@ export const HRManagerDashboard: React.FC<HRManagerDashboardProps> = ({ activeTa
       {/* 6. ASSETS REGISTER TAB */}
       {activeTab === 'assets' && (
         <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <HardDrive className="w-5 h-5 text-indigo-400" /> Assets Register Log
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {assets.map(a => (
-              <div key={a.id} className="p-4 rounded-xl bg-slate-100/80 border border-slate-200 space-y-1 text-xs">
-                <div className="font-mono text-indigo-400 font-bold">{a.assetCode}</div>
-                <div className="font-bold text-slate-900 text-sm">{a.name}</div>
-                <div className="text-slate-500">Status: {a.status}</div>
-              </div>
-            ))}
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <HardDrive className="w-5 h-5 text-indigo-400" /> Assets Register
+            </h3>
+            <button
+              onClick={() => setShowAddAssetModal(true)}
+              className="px-4 py-2 rounded-xl glass-btn-primary text-white font-bold text-xs shadow-md"
+            >
+              + Add Asset
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-slate-500">
+                  <th className="py-2 pr-3 font-semibold">Employee</th>
+                  <th className="py-2 pr-3 font-semibold">Type</th>
+                  <th className="py-2 pr-3 font-semibold">Model / Device ID</th>
+                  <th className="py-2 pr-3 font-semibold">Issued Date</th>
+                  <th className="py-2 pr-3 font-semibold">Renewal</th>
+                  <th className="py-2 pr-3 font-semibold">Status</th>
+                  <th className="py-2 pr-3 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assets.map(a => (
+                  <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                    <td className="py-2.5 pr-3 font-semibold text-slate-900">{a.assignedToName}</td>
+                    <td className="py-2.5 pr-3 capitalize text-slate-600">{a.assetType}</td>
+                    <td className="py-2.5 pr-3 text-slate-600">{a.modelName || a.brandModel || a.deviceId || '—'}</td>
+                    <td className="py-2.5 pr-3 text-slate-600">{a.issuedDate}</td>
+                    <td className="py-2.5 pr-3"><AssetRenewalCell issuedDate={a.issuedDate} returnDate={a.returnDate} renewalIntervalDays={a.renewalIntervalDays} /></td>
+                    <td className="py-2.5 pr-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        a.status === 'active' ? 'bg-emerald-500/20 text-emerald-700'
+                        : a.status === 'returned' ? 'bg-slate-400/20 text-slate-600'
+                        : 'bg-red-500/20 text-red-700'
+                      }`}>
+                        {a.status}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3 text-right">
+                      <button
+                        onClick={() => setViewingAssetId(String(a.id))}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 font-bold transition-colors"
+                      >
+                        View More
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {assets.length === 0 && (
+                  <tr><td colSpan={7} className="py-6 text-center text-slate-400 italic">No assets registered yet.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
+      {showAddAssetModal && <AddAssetModal onClose={() => setShowAddAssetModal(false)} />}
+      {viewingAssetId && <AssetDetailModal assetId={viewingAssetId} onClose={() => setViewingAssetId(null)} />}
 
-      {/* 7. ENTRY EMPLOYEE DETAILS TAB (SPECIALIZED PHOTO & DOC UPLOAD) */}
+      {/* 7. EMPLOYEE PROFILE MANAGEMENT TAB */}
       {activeTab === 'hr_employee_entry' && (
-        <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-indigo-400" /> Entry Employee Details & Document Verification
-              </h3>
-              <p className="text-xs text-slate-500">
-                Register employee details with Photo, Academic photo, Citizenship photo, and PAN/NID photos
-              </p>
-            </div>
-            {savedSuccess && (
-              <span className="px-3 py-1 rounded-xl bg-emerald-500/20 text-emerald-700 text-xs font-bold border border-emerald-500/30">
-                ✓ Employee Recorded!
-              </span>
-            )}
-          </div>
-
-          <form onSubmit={handleSaveEmployeeDetails} className="space-y-6 text-xs">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Employee Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Suman Pokhrel"
-                  value={empName}
-                  onChange={e => setEmpName(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Employee Code</label>
-                <input
-                  type="text"
-                  value={empCode}
-                  onChange={e => setEmpCode(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Designation</label>
-                <input
-                  type="text"
-                  placeholder="HR Specialist"
-                  value={designation}
-                  onChange={e => setDesignation(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Date of Birth</label>
-                <input
-                  type="date"
-                  value={dob}
-                  onChange={e => setDob(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Citizenship & PAN</label>
-                <input
-                  type="text"
-                  value={citizenshipPan}
-                  onChange={e => setCitizenshipPan(e.target.value)}
-                  placeholder="PAN-98124"
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Emergency Contact Phone</label>
-                <input
-                  type="text"
-                  value={emergencyPhone}
-                  onChange={e => setEmergencyPhone(e.target.value)}
-                  placeholder="+1 555-0199"
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-            </div>
-
-            {/* Specialized Document Uploader */}
-            <DocumentUploader
-              documents={docState}
-              onChange={docs => setDocState(docs)}
-            />
-
-            <div className="flex justify-end pt-4 border-t border-slate-200">
-              <button
-                type="submit"
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors text-xs shadow-lg flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" /> Save Employee Entry
-              </button>
-            </div>
-          </form>
+        <div className="p-4 sm:p-6 rounded-2xl bg-white border border-slate-200">
+          <EmployeeDirectoryPanel showAccountControls={false} />
         </div>
       )}
 
       {/* 8. REPORT DOWNLOAD TAB */}
-      {activeTab === 'reports' && (
-        <div className="p-6 rounded-2xl bg-white border border-slate-200 text-center space-y-4">
-          <FileBadge className="w-12 h-12 text-indigo-400 mx-auto" />
-          <h3 className="text-lg font-bold text-slate-900">Generate Official HR Documents & Reports</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Generate employment contracts, salary increase letters, and performance reports with printable format.
-          </p>
-          <button
-            onClick={() => setShowReportModal(true)}
-            className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors text-xs shadow-lg"
-          >
-            Open Report Generator
-          </button>
-        </div>
+      {activeTab === 'documents' && <DocumentGeneratorPanel />}
+
+      {activeTab === 'audit_logs' && (
+        <div className="p-4 sm:p-6 rounded-2xl bg-white border border-slate-200"><AuditLogPanel /></div>
       )}
 
       {/* 9. MY PROFILE TAB */}
+      {activeTab === 'attendance_management' && <AttendanceManagementPanel role="hr_manager" />}
+
       {activeTab === 'profile' && (
-        <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4">
-          <h3 className="text-lg font-bold text-slate-900">HR Manager Profile</h3>
-          <p className="text-xs text-slate-600">Logged in as {currentUser.name} ({currentUser.email})</p>
+        <div className="p-4 sm:p-6 rounded-2xl bg-white border border-slate-200 space-y-5">
+          <div className="border-b border-slate-200 pb-4"><h3 className="text-lg font-bold text-slate-900">My HR Profile</h3><p className="text-xs text-slate-500 mt-1">Manage your own synced employee and contact record.</p></div>
+          <EmployeeProfileForm />
         </div>
       )}
 
       {/* Report Modal */}
-      {showReportModal && <ReportGeneratorModal onClose={() => setShowReportModal(false)} />}
 
     </div>
   );

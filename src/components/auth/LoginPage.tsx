@@ -1,21 +1,38 @@
 import React, { useMemo, useState } from 'react';
-import { Mail, Lock, LogIn, ShieldCheck } from 'lucide-react';
+import {
+  ArrowRight,
+  BriefcaseBusiness,
+  Building2,
+  Check,
+  Eye,
+  EyeOff,
+  KeyRound,
+  LockKeyhole,
+  LogIn,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+} from 'lucide-react';
 import { useHR } from '../../context/HRContext';
 import { UserRole } from '../../types';
 import {
   AuthUser,
   completeSignup,
+  loginWithPassword,
   requestPasswordReset,
   resetPassword,
-  sendLoginOtp,
   sendSignupOtp,
-  verifyLoginOtp,
 } from '../../lib/authApi';
 import { Logo } from '../common/Logo';
 
 interface LoginPageProps { onAuthenticated: () => void; }
-type LoginStep = 'credentials' | 'otp';
 type SignupStep = 1 | 2 | 3;
+
+const DEPARTMENTS = ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance', 'Operations', 'Customer Support', 'IT', 'Legal', 'Other'];
+const DESIGNATIONS = ['Manager', 'Team Lead', 'Senior Executive', 'Executive', 'Associate', 'Intern', 'Director', 'Coordinator', 'Specialist', 'Other'];
+
+const STEP_LABELS = ['Verify email', 'Secure account', 'Complete profile'];
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onAuthenticated }) => {
   const { hydrateSessionFromServer } = useHR();
@@ -24,28 +41,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onAuthenticated }) => {
   const resetEmailFromUrl = query.get('email') || '';
   const inviteCodeFromUrl = query.get('invite') || '';
 
-  const [activeTab, setActiveTab] = useState<'login' | 'signup'>(inviteCodeFromUrl ? 'signup' : 'login');
+  const showInviteFlow = Boolean(inviteCodeFromUrl);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [loginStep, setLoginStep] = useState<LoginStep>('credentials');
   const [loginEmail, setLoginEmail] = useState(resetEmailFromUrl);
   const [loginPassword, setLoginPassword] = useState('');
-  const [loginOtp, setLoginOtp] = useState('');
-  const [challengeId, setChallengeId] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [newPassword, setNewPassword] = useState('');
+  const [resetComplete, setResetComplete] = useState(false);
 
   const [signupStep, setSignupStep] = useState<SignupStep>(1);
   const [signupEmail, setSignupEmail] = useState(resetEmailFromUrl && inviteCodeFromUrl ? resetEmailFromUrl : '');
-  const [invitationCode, setInvitationCode] = useState(inviteCodeFromUrl);
+  const [invitationCode] = useState(inviteCodeFromUrl);
   const [signupOtp, setSignupOtp] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [empCode, setEmpCode] = useState('');
   const [empName, setEmpName] = useState('');
-  const [designation, setDesignation] = useState('');
-  const [department, setDepartment] = useState('Engineering');
+  const [designation, setDesignation] = useState(DESIGNATIONS[0]);
+  const [department, setDepartment] = useState(DEPARTMENTS[0]);
 
   const resetAlerts = () => { setError(''); setMessage(''); };
+
   const resolveSession = (authUser: AuthUser) => {
     hydrateSessionFromServer({
       id: authUser.id,
@@ -55,99 +72,304 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onAuthenticated }) => {
       employeeCode: authUser.employeeCode,
       designation: authUser.designation,
       department: authUser.department,
+      companyId: authUser.companyId,
+      companyName: authUser.companyName,
     });
     onAuthenticated();
   };
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
-    e.preventDefault(); resetAlerts(); setLoading(true);
+    e.preventDefault();
+    resetAlerts();
+    setLoading(true);
     try {
-      const result = await sendLoginOtp(loginEmail.trim(), loginPassword);
-      setChallengeId(result.challengeId);
-      setLoginStep('otp');
-      setMessage(result.message || `A 6-digit code was sent to ${loginEmail.trim()}.`);
-    } catch (err: any) { setError(err.message || 'Invalid email or password.'); }
-    finally { setLoading(false); }
-  };
-
-  const handleVerifyLoginOtp = async (e: React.FormEvent) => {
-    e.preventDefault(); resetAlerts(); setLoading(true);
-    try {
-      const result = await verifyLoginOtp(loginEmail.trim(), loginOtp, challengeId);
+      const result = await loginWithPassword(loginEmail.trim(), loginPassword, rememberMe);
       resolveSession(result.user);
-    } catch (err: any) { setError(err.message || 'OTP verification failed.'); }
-    finally { setLoading(false); }
+    } catch (err: any) {
+      setError(err.message || 'Invalid email or password.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleForgotPassword = async () => {
     resetAlerts();
-    if (!loginEmail.trim()) { setError('Enter your email address first.'); return; }
+    if (!loginEmail.trim()) {
+      setError('Enter your email address first.');
+      return;
+    }
     setLoading(true);
-    try { const result = await requestPasswordReset(loginEmail.trim()); setMessage(result.message); }
-    catch (err: any) { setError(err.message || 'Could not send reset email.'); }
-    finally { setLoading(false); }
+    try {
+      const result = await requestPasswordReset(loginEmail.trim());
+      setMessage(result.message);
+    } catch (err: any) {
+      setError(err.message || 'Could not send reset email.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault(); resetAlerts(); setLoading(true);
+    e.preventDefault();
+    resetAlerts();
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    setLoading(true);
     try {
       const result = await resetPassword(resetEmailFromUrl, resetTokenFromUrl, newPassword);
       window.history.replaceState({}, '', window.location.pathname);
       setMessage(result.message);
       setLoginEmail(resetEmailFromUrl);
-    } catch (err: any) { setError(err.message || 'Password reset failed.'); }
-    finally { setLoading(false); }
+      setResetComplete(true);
+    } catch (err: any) {
+      setError(err.message || 'Password reset failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSendSignupOtp = async (e: React.FormEvent) => {
-    e.preventDefault(); resetAlerts(); setLoading(true);
+    e.preventDefault();
+    resetAlerts();
+    setLoading(true);
     try {
-      const result = await sendSignupOtp(signupEmail.trim(), invitationCode.trim() || undefined, empName || undefined);
-      setSignupStep(2); setMessage(result.message);
-    } catch (err: any) { setError(err.message || 'Could not send verification code.'); }
-    finally { setLoading(false); }
+      const result = await sendSignupOtp(signupEmail.trim(), invitationCode.trim(), undefined);
+      setSignupStep(2);
+      setMessage(result.message);
+    } catch (err: any) {
+      setError(err.message || 'Could not send verification code.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSignupVerify = (e: React.FormEvent) => {
-    e.preventDefault(); resetAlerts();
-    if (!/^\d{6}$/.test(signupOtp)) { setError('Enter the 6-digit code from your email.'); return; }
-    if (signupPassword.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    e.preventDefault();
+    resetAlerts();
+    if (!/^\d{6}$/.test(signupOtp)) {
+      setError('Enter the 6-digit code from your email.');
+      return;
+    }
+    if (signupPassword.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
     setSignupStep(3);
   };
 
   const handleFinalizeSignup = async (e: React.FormEvent) => {
-    e.preventDefault(); resetAlerts(); setLoading(true);
+    e.preventDefault();
+    resetAlerts();
+    setLoading(true);
     try {
       const result = await completeSignup({
-        email: signupEmail.trim(), password: signupPassword, otp: signupOtp,
-        invitationCode: invitationCode.trim() || undefined,
-        profile: { name: empName, employeeCode: empCode, designation, department },
+        email: signupEmail.trim(),
+        password: signupPassword,
+        otp: signupOtp,
+        invitationCode: invitationCode.trim(),
+        profile: { name: empName.trim(), employeeCode: empCode.trim(), designation, department },
       });
       resolveSession(result.user);
-    } catch (err: any) { setError(err.message || 'Account creation failed.'); }
-    finally { setLoading(false); }
+    } catch (err: any) {
+      setError(err.message || 'Account creation failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  return <div className="min-h-screen flex bg-slate-50">
-    <div className="hidden lg:flex lg:w-[45%] p-12 border-r border-slate-200 flex-col justify-between auth-aurora">
-      <Logo size="lg" />
-      <div className="max-w-md"><div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold mb-5"><ShieldCheck className="w-4 h-4" /> Secure authentication</div><h1 className="text-4xl font-black text-slate-900 leading-tight">One secure workspace for your whole team.</h1><p className="mt-4 text-slate-600">Email/password authentication, email OTP, invitations and password reset powered by your NexuxHR cPanel, PHP, MySQL and mail server.</p></div>
-      <p className="text-xs text-slate-500">© {new Date().getFullYear()} NexuxHR</p>
-    </div>
-    <div className="flex-1 flex items-center justify-center p-5"><div className="w-full max-w-md glass-modal rounded-2xl border border-slate-200 shadow-xl p-7">
-      <div className="lg:hidden flex justify-center mb-6"><Logo size="md" /></div>
-      {error && <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>}
-      {message && <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm">{message}</div>}
+  return (
+    <main className="auth-page-shell">
+      <section className="auth-brand-panel">
+        <div className="auth-brand-content">
+          <div className="auth-logo-card"><Logo size="lg" /></div>
 
-      {resetTokenFromUrl ? <form onSubmit={handleResetPassword} className="space-y-4"><h2 className="text-2xl font-black">Set a new password</h2><p className="text-sm text-slate-500">Resetting password for {resetEmailFromUrl}</p><Field icon={<Lock className="w-4 h-4" />} type="password" placeholder="New password (minimum 8 characters)" value={newPassword} onChange={setNewPassword} /><Primary loading={loading} label="Update Password" /></form> : <>
-        <div className="flex p-1.5 rounded-xl bg-slate-100 mb-6 text-sm font-bold"><button onClick={() => { setActiveTab('login'); resetAlerts(); }} className={`flex-1 py-2 rounded-lg ${activeTab === 'login' ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}>Sign In</button><button onClick={() => { setActiveTab('signup'); resetAlerts(); }} className={`flex-1 py-2 rounded-lg ${activeTab === 'signup' ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}>Create Account</button></div>
-        {activeTab === 'login' && loginStep === 'credentials' && <form onSubmit={handleEmailSignIn} className="space-y-4"><div><h2 className="text-2xl font-black">Welcome back</h2><p className="text-sm text-slate-500 mt-1">Password पछि email OTP verify हुन्छ।</p></div><Field icon={<Mail className="w-4 h-4" />} type="email" placeholder="you@nexuxhr.com" value={loginEmail} onChange={setLoginEmail} /><Field icon={<Lock className="w-4 h-4" />} type="password" placeholder="Password" value={loginPassword} onChange={setLoginPassword} /><button type="button" onClick={handleForgotPassword} className="text-xs font-bold text-indigo-600">Forgot password?</button><Primary loading={loading} label="Continue & Send OTP" icon={<LogIn className="w-4 h-4" />} /></form>}
-        {activeTab === 'login' && loginStep === 'otp' && <form onSubmit={handleVerifyLoginOtp} className="space-y-4"><div><h2 className="text-2xl font-black">Verify login</h2><p className="text-sm text-slate-500 mt-1">Check the inbox of {loginEmail}.</p></div><input autoFocus inputMode="numeric" maxLength={6} value={loginOtp} onChange={e => setLoginOtp(e.target.value.replace(/\D/g, ''))} placeholder="000000" className="w-full py-3 text-center text-2xl tracking-[.4em] rounded-xl border border-slate-300" /><Primary loading={loading} label="Verify & Sign In" icon={<ShieldCheck className="w-4 h-4" />} /><button type="button" onClick={() => { setLoginStep('credentials'); resetAlerts(); }} className="w-full text-xs font-bold text-slate-500">Back to password</button></form>}
-        {activeTab === 'signup' && <div className="space-y-4"><div><h2 className="text-2xl font-black">Create account</h2><p className="text-sm text-slate-500 mt-1">Step {signupStep} of 3</p></div>{signupStep === 1 && <form onSubmit={handleSendSignupOtp} className="space-y-3"><Field icon={<Mail className="w-4 h-4" />} type="email" placeholder="employee@company.com" value={signupEmail} onChange={setSignupEmail} /><input value={invitationCode} onChange={e => setInvitationCode(e.target.value)} placeholder="Invitation code (optional)" className="w-full px-3 py-2.5 rounded-xl border border-slate-300" /><Primary loading={loading} label="Send Email OTP" /></form>}{signupStep === 2 && <form onSubmit={handleSignupVerify} className="space-y-3"><input inputMode="numeric" maxLength={6} value={signupOtp} onChange={e => setSignupOtp(e.target.value.replace(/\D/g, ''))} placeholder="6-digit OTP" className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-center tracking-widest" /><Field icon={<Lock className="w-4 h-4" />} type="password" placeholder="Password (minimum 8 characters)" value={signupPassword} onChange={setSignupPassword} /><Primary loading={false} label="Continue to Profile" /></form>}{signupStep === 3 && <form onSubmit={handleFinalizeSignup} className="space-y-3"><input required value={empName} onChange={e => setEmpName(e.target.value)} placeholder="Full name" className="w-full px-3 py-2.5 rounded-xl border border-slate-300" /><input required value={empCode} onChange={e => setEmpCode(e.target.value)} placeholder="Employee code" className="w-full px-3 py-2.5 rounded-xl border border-slate-300" /><input value={designation} onChange={e => setDesignation(e.target.value)} placeholder="Designation" className="w-full px-3 py-2.5 rounded-xl border border-slate-300" /><input value={department} onChange={e => setDepartment(e.target.value)} placeholder="Department" className="w-full px-3 py-2.5 rounded-xl border border-slate-300" /><Primary loading={loading} label="Create NexuxHR Account" /></form>}</div>}
-      </>}
-    </div></div>
-  </div>;
+          <div className="auth-brand-copy">
+            <span className="auth-kicker"><Sparkles className="w-4 h-4" /> Modern HR operations</span>
+            <h1>Everything your people need, in one secure workspace.</h1>
+            <p>Manage employees, assets, leave, attendance and company workflows without scattered files or manual follow-up.</p>
+
+            <div className="auth-benefits">
+              {[
+                'Secure employee records and workflows',
+                'Company-isolated data and permissions',
+                'Fast HR, asset and attendance operations',
+              ].map(item => (
+                <div key={item}><span><Check className="w-3.5 h-3.5" /></span>{item}</div>
+              ))}
+            </div>
+          </div>
+
+          <p className="auth-copyright">© {new Date().getFullYear()} NexuxHR. Secure workforce management.</p>
+        </div>
+      </section>
+
+      <section className="auth-form-panel">
+        <div className="auth-mobile-logo"><Logo size="md" /></div>
+        <div className="auth-form-card">
+          {error && <div role="alert" className="auth-alert auth-alert-error">{error}</div>}
+          {message && <div role="status" className="auth-alert auth-alert-success">{message}</div>}
+
+          {resetTokenFromUrl && !resetComplete ? (
+            <form onSubmit={handleResetPassword} className="auth-form-stack" autoComplete="off">
+              <FormHeading icon={<KeyRound />} title="Set a new password" description={`Create a new password for ${resetEmailFromUrl}.`} />
+              <LabeledField label="New password" icon={<LockKeyhole />} type="password" autoComplete="new-password" placeholder="Minimum 8 characters" value={newPassword} onChange={setNewPassword} />
+              <Primary loading={loading} label="Update password" icon={<ArrowRight className="w-4 h-4" />} />
+            </form>
+          ) : showInviteFlow ? (
+            <div className="auth-form-stack">
+              <FormHeading icon={<ShieldCheck />} title="Accept your invitation" description="Verify your email once, create your password, then complete your profile." />
+              <SignupProgress step={signupStep} />
+
+              {signupStep === 1 && (
+                <form onSubmit={handleSendSignupOtp} className="auth-form-stack auth-step-enter" autoComplete="off">
+                  <LabeledField
+                    label="Invited email address"
+                    icon={<Mail />}
+                    type="email"
+                    autoComplete="username"
+                    placeholder="employee@company.com"
+                    value={signupEmail}
+                    onChange={setSignupEmail}
+                    readOnly={Boolean(resetEmailFromUrl)}
+                  />
+                  
+                  <Primary loading={loading} label="Send email OTP" icon={<ArrowRight className="w-4 h-4" />} />
+                </form>
+              )}
+
+              {signupStep === 2 && (
+                <form onSubmit={handleSignupVerify} className="auth-form-stack auth-step-enter" autoComplete="off">
+                  <LabeledField label="6-digit verification code" icon={<KeyRound />} type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="Enter OTP" value={signupOtp} onChange={v => setSignupOtp(v.replace(/\D/g, '').slice(0, 6))} />
+                  <LabeledField label="Create your password" icon={<LockKeyhole />} type="password" autoComplete="new-password" placeholder="Minimum 8 characters" value={signupPassword} onChange={setSignupPassword} />
+                  <Primary loading={false} label="Continue to profile" icon={<ArrowRight className="w-4 h-4" />} />
+                </form>
+              )}
+
+              {signupStep === 3 && (
+                <form onSubmit={handleFinalizeSignup} className="auth-form-stack auth-step-enter" autoComplete="off">
+                  <LabeledField label="Full name" icon={<UserRound />} type="text" autoComplete="name" placeholder="Your full name" value={empName} onChange={setEmpName} />
+                  <LabeledField label="Employee code" icon={<BriefcaseBusiness />} type="text" autoComplete="off" placeholder="Provided by your company" value={empCode} onChange={setEmpCode} />
+                  <div className="auth-two-column">
+                    <LabeledSelect label="Designation" icon={<BriefcaseBusiness />} value={designation} onChange={setDesignation} options={DESIGNATIONS} />
+                    <LabeledSelect label="Department" icon={<Building2 />} value={department} onChange={setDepartment} options={DEPARTMENTS} />
+                  </div>
+                  <Primary loading={loading} label="Create NexuxHR account" icon={<ArrowRight className="w-4 h-4" />} />
+                </form>
+              )}
+            </div>
+          ) : (
+            <form onSubmit={handleEmailSignIn} className="auth-form-stack" autoComplete="off">
+              <FormHeading icon={<LogIn />} title="Welcome back" description="Sign in to your NexuxHR workspace with your email and password." />
+              <LabeledField label="Work email" icon={<Mail />} type="email" autoComplete="username" placeholder="you@company.com" value={loginEmail} onChange={setLoginEmail} />
+              <LabeledField label="Password" icon={<LockKeyhole />} type="password" autoComplete="current-password" placeholder="Enter your password" value={loginPassword} onChange={setLoginPassword} />
+              <div className="auth-form-meta">
+                <label className="auth-remember">
+                  <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} />
+                  <span>Remember me</span>
+                </label>
+                <button type="button" disabled={loading} onClick={handleForgotPassword}>Forgot password?</button>
+              </div>
+              <Primary loading={loading} label="Sign in securely" icon={<LogIn className="w-4 h-4" />} />
+            </form>
+          )}
+        </div>
+      </section>
+    </main>
+  );
 };
 
-const Field = ({ icon, type, placeholder, value, onChange }: { icon: React.ReactNode; type: string; placeholder: string; value: string; onChange: (v: string) => void }) => <div className="relative"><span className="absolute left-3 top-3 text-slate-400">{icon}</span><input required type={type} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300" /></div>;
-const Primary = ({ loading, label, icon }: { loading: boolean; label: string; icon?: React.ReactNode }) => <button disabled={loading} type="submit" className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-60">{icon}{loading ? 'Please wait...' : label}</button>;
+const FormHeading = ({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) => (
+  <div className="auth-heading">
+    <div className="auth-heading-icon">{icon}</div>
+    <div><h2>{title}</h2><p>{description}</p></div>
+  </div>
+);
+
+const SignupProgress = ({ step }: { step: SignupStep }) => (
+  <div className="auth-progress" aria-label={`Step ${step} of 3`}>
+    {STEP_LABELS.map((label, index) => {
+      const number = index + 1;
+      const completed = number < step;
+      const active = number === step;
+      return (
+        <React.Fragment key={label}>
+          <div className={`auth-progress-item ${active ? 'is-active' : ''} ${completed ? 'is-complete' : ''}`}>
+            <span>{completed ? <Check className="w-3.5 h-3.5" /> : number}</span>
+            <small>{label}</small>
+          </div>
+          {index < STEP_LABELS.length - 1 && <div className={`auth-progress-line ${number < step ? 'is-complete' : ''}`} />}
+        </React.Fragment>
+      );
+    })}
+  </div>
+);
+
+const LabeledField = ({
+  label, icon, type, placeholder, value, onChange, autoComplete, inputMode, maxLength, required = true, readOnly = false,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  type: string;
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  autoComplete?: string;
+  inputMode?: 'numeric' | 'text';
+  maxLength?: number;
+  required?: boolean;
+  readOnly?: boolean;
+}) => {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === 'password';
+  return (
+    <label className="auth-field">
+      <span className="auth-field-label">{label}</span>
+      <span className="auth-input-wrap">
+        <span className="auth-input-icon">{icon}</span>
+        <input
+          required={required}
+          readOnly={readOnly}
+          type={isPassword && showPassword ? 'text' : type}
+          inputMode={inputMode}
+          maxLength={maxLength}
+          autoComplete={autoComplete}
+          placeholder={placeholder}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className={readOnly ? 'is-readonly' : ''}
+        />
+        {isPassword && (
+          <button type="button" onClick={() => setShowPassword(v => !v)} className="auth-password-toggle" aria-label={showPassword ? 'Hide password' : 'Show password'}>
+            {showPassword ? <EyeOff /> : <Eye />}
+          </button>
+        )}
+      </span>
+    </label>
+  );
+};
+
+const LabeledSelect = ({ label, icon, value, onChange, options }: {
+  label: string;
+  icon: React.ReactNode;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) => (
+  <label className="auth-field">
+    <span className="auth-field-label">{label}</span>
+    <span className="auth-input-wrap">
+      <span className="auth-input-icon">{icon}</span>
+      <select value={value} onChange={e => onChange(e.target.value)}>
+        {options.map(option => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </span>
+  </label>
+);
+
+const Primary = ({ loading, label, icon }: { loading: boolean; label: string; icon?: React.ReactNode }) => (
+  <button disabled={loading} type="submit" className="auth-primary-button">
+    <span>{loading ? 'Please wait…' : label}</span>{!loading && icon}
+  </button>
+);

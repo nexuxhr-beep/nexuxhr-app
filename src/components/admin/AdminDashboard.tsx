@@ -1,33 +1,35 @@
-import React, { useState } from 'react';
+import { AttendanceManagementPanel } from '../common/AttendanceManagementPanel';
+import { AttendancePolicyPanel } from '../common/AttendancePolicyPanel';
+import { DocumentGeneratorPanel } from '../common/DocumentGeneratorPanel';
+import React, { useEffect, useState } from 'react';
 import { useHR } from '../../context/HRContext';
-import { KanbanTaskBoard } from '../common/KanbanTaskBoard';
-import { ReportGeneratorModal } from '../common/ReportGeneratorModal';
-import { DocumentUploader } from '../common/DocumentUploader';
+import { RequestManagementPanel } from '../common/RequestManagementPanel';
+import { EmployeeDirectoryPanel } from '../common/EmployeeDirectoryPanel';
+import { ContractOverviewPanel } from '../common/ContractOverviewPanel';
+import { AuditLogPanel } from '../common/AuditLogPanel';
+import { EmployeeProfileForm } from '../common/EmployeeProfileForm';
+import { AddAssetModal } from './AddAssetModal';
+import { AssetDetailModal } from './AssetDetailModal';
+import { AssetRenewalCell } from '../common/AssetRenewalCell';
+import { UpcomingBirthdays } from '../common/UpcomingBirthdays';
+import { AttendanceInsights } from '../common/AttendanceInsights';
+import { OfficeExpensesPanel } from '../common/OfficeExpensesPanel';
 import { UserProfile, UserRole } from '../../types';
 import {
-  Clock,
+  AlertTriangle,
   CalendarCheck,
-  CheckCircle2,
-  XCircle,
-  Users,
-  UserPlus,
-  FileBadge,
-  Megaphone,
-  HardDrive,
-  Briefcase,
-  User,
-  Plus,
-  Trash2,
   Check,
-  X,
-  TrendingUp,
+  CheckCircle2,
+  Clock,
   FileText,
-  Building2,
-  ShieldAlert,
-  Send,
-  Save,
-  UserCheck,
-  UserX
+  HardDrive,
+  Megaphone,
+  Trash2,
+  TrendingUp,
+  User,
+  UserPlus,
+  Users,
+  X
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -49,32 +51,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
     deleteNotice,
     addAsset,
     updateAssetStatus,
-    addContract,
     createInvitation,
+    invitations,
+    deleteInvitationAction,
     toggleUserActiveStatus,
     updateCurrentUserProfile
   } = useHR();
 
   // Modal & Form States
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [reportEmpTarget, setReportEmpTarget] = useState<UserProfile | undefined>();
 
   // Notice Form State
   const [newNoticeTitle, setNewNoticeTitle] = useState('');
+  const [employeeStatusFilter, setEmployeeStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [newNoticeContent, setNewNoticeContent] = useState('');
-  const [newNoticePriority, setNewNoticePriority] = useState<'Normal' | 'Important' | 'Urgent'>('Important');
+
 
   // Asset Form State
-  const [newAssetName, setNewAssetName] = useState('');
-  const [newAssetCategory, setNewAssetCategory] = useState<any>('Laptop');
-  const [newAssetSerial, setNewAssetSerial] = useState('');
+  const [showAddAssetModal, setShowAddAssetModal] = useState(false);
+  const [viewingAssetId, setViewingAssetId] = useState<string | null>(null);
 
   // Attendance Entry Form
-  const [attEmpId, setAttEmpId] = useState(users[0]?.employeeId || users[0]?.id);
+  const [attEmpId, setAttEmpId] = useState('');
   const [attDate, setAttDate] = useState(new Date().toISOString().split('T')[0]);
   const [attStatus, setAttStatus] = useState<any>('Present');
-  const [attCheckIn, setAttCheckIn] = useState('09:00:00');
-  const [attCheckOut, setAttCheckOut] = useState('17:30:00');
+  const [attCheckIn, setAttCheckIn] = useState('');
+  const [attCheckOut, setAttCheckOut] = useState('');
+
+  const attendanceEmployees = users.filter(user => user.role !== 'superadmin' && user.isActive);
+
+  useEffect(() => {
+    if (!attEmpId && attendanceEmployees.length > 0) {
+      setAttEmpId(attendanceEmployees[0].id);
+    }
+  }, [attEmpId, attendanceEmployees]);
 
   // Leave Review Comment
   const [reviewComment, setReviewComment] = useState('');
@@ -94,50 +103,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
   const presentRatePct = activeEmployees.length > 0 ? Math.round((todayCheckIns.length / activeEmployees.length) * 100) : 0;
   const onLeaveRatePct = activeEmployees.length > 0 ? Math.round((onLeaveToday.length / activeEmployees.length) * 100) : 0;
 
-  const handleAddNotice = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNoticeTitle.trim()) return;
-    addNotice({
-      title: newNoticeTitle,
-      content: newNoticeContent,
-      postedBy: currentUser.id,
-      postedByName: `${currentUser.name} (Admin)`,
-      priority: newNoticePriority,
-      targetRole: 'All'
-    });
-    setNewNoticeTitle('');
-    setNewNoticeContent('');
+  const [noticeError, setNoticeError] = useState('');
+  /** Urgent notices force a blocking popup on every other user's screen. */
+  const publishNotice = async (priority: 'Normal' | 'Urgent') => {
+    if (!newNoticeTitle.trim() || !newNoticeContent.trim()) {
+      setNoticeError('Title and content are both required.');
+      return;
+    }
+    setNoticeError('');
+    try {
+      await addNotice({
+        title: newNoticeTitle,
+        content: newNoticeContent,
+        priority,
+      });
+      setNewNoticeTitle('');
+      setNewNoticeContent('');
+    } catch (err: any) {
+      setNoticeError(err.message || 'Could not post notice.');
+    }
   };
 
-  const handleAddAsset = (e: React.FormEvent) => {
+  const handleManualAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAssetName.trim()) return;
-    addAsset({
-      assetCode: `AST-${Math.floor(100 + Math.random() * 900)}`,
-      name: newAssetName,
-      category: newAssetCategory,
-      status: 'Available',
-      purchaseDate: todayStr,
-      serialNumber: newAssetSerial || 'SN-GEN-001'
-    });
-    setNewAssetName('');
-    setNewAssetSerial('');
-  };
+    const targetUser = attendanceEmployees.find(user => user.id === attEmpId);
+    if (!targetUser) {
+      alert('Please select an active employee.');
+      return;
+    }
 
-  const handleManualAttendance = (e: React.FormEvent) => {
-    e.preventDefault();
-    const targetUser = users.find(u => u.employeeId === attEmpId || u.id === attEmpId);
-    addAttendanceRecord({
-      employeeId: attEmpId,
-      employeeName: targetUser ? targetUser.name : 'Employee',
-      date: attDate,
-      month: attDate.substring(0, 7),
-      checkIn: attCheckIn,
-      checkOut: attCheckOut,
-      status: attStatus,
-      workHours: 8.5
-    });
-    alert('Attendance record added successfully!');
+    try {
+      await addAttendanceRecord({
+        employeeId: targetUser.id,
+        employeeName: targetUser.name,
+        date: attDate,
+        month: attDate.substring(0, 7),
+        checkIn: attCheckIn || undefined,
+        checkOut: attCheckOut || undefined,
+        status: attStatus
+      });
+      alert('Attendance record saved successfully.');
+    } catch (error: any) {
+      alert(error?.message || 'Could not save attendance.');
+    }
   };
 
   const handleCreatePositionInvite = async (e: React.FormEvent) => {
@@ -163,18 +171,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
               <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-700 border border-blue-500/30">
                 Admin Operations Console
               </span>
-              <h2 className="text-2xl font-black text-slate-900 mt-2">Acme Software Solutions Admin Panel</h2>
-              <p className="text-sm text-slate-600">Monitored check-ins, leaves, contract compliance, and employee position control</p>
+              <h2 className="text-2xl font-black text-slate-900 mt-2">{currentUser.companyName || 'Company'} Admin Panel</h2>
+              <p className="text-sm text-slate-600">Biometric attendance, leaves, contract compliance, and employee position control</p>
             </div>
-            <button
-              onClick={() => {
-                setReportEmpTarget(undefined);
-                setShowReportModal(true);
-              }}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors text-xs shadow-lg flex items-center gap-2 shrink-0"
-            >
-              <FileBadge className="w-4 h-4" /> Generate Official HR Report
-            </button>
           </div>
 
           {/* Key Today Metrics */}
@@ -224,6 +223,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
                 <FileText className="w-6 h-6" />
               </div>
             </div>
+          </div>
+
+          {/* Top 5 absent / present for the current Nepali month */}
+          <AttendanceInsights />
+
+          {/* Upcoming birthdays */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <UpcomingBirthdays />
           </div>
 
           {/* Today's Check-ins Feed & Absence Graph */}
@@ -285,8 +292,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
         </div>
       )}
 
-      {/* 2. MY TASKS & KANBAN TAB */}
-      {activeTab === 'tasks' && <KanbanTaskBoard />}
+      {/* 2. MY TASK TAB */}
+
+      {activeTab === 'requests' && <RequestManagementPanel />}
 
       {/* 3. ATTENDANCE ENTRY (MONTH WISE) TAB */}
       {activeTab === 'attendance_entry' && (
@@ -296,7 +304,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
               <CalendarCheck className="w-5 h-5 text-indigo-400" /> Month-Wise Attendance Entry & Correction
             </h3>
 
-            <form onSubmit={handleManualAttendance} className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3 bg-slate-100/60 p-4 rounded-xl border border-slate-200/60 text-xs">
+            <form onSubmit={handleManualAttendance} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3 bg-slate-100/60 p-4 rounded-xl border border-slate-200/60 text-xs">
               <div className="sm:col-span-2">
                 <label className="block text-slate-600 font-semibold mb-1">Employee</label>
                 <select
@@ -304,9 +312,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
                   onChange={e => setAttEmpId(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg glass-input text-slate-900"
                 >
-                  {users.map(u => (
-                    <option key={u.id} value={u.employeeId || u.id}>
-                      {u.name} ({u.employeeId || 'NX-001'})
+                  <option value="" disabled>Select employee</option>
+                  {attendanceEmployees.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} ({user.employeeCode || user.employeeId || `#${user.id}`})
                     </option>
                   ))}
                 </select>
@@ -340,9 +349,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
               <div>
                 <label className="block text-slate-600 font-semibold mb-1">Check In</label>
                 <input
-                  type="text"
+                  type="time"
                   value={attCheckIn}
                   onChange={e => setAttCheckIn(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg glass-input text-slate-900 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">Check Out</label>
+                <input
+                  type="time"
+                  value={attCheckOut}
+                  onChange={e => setAttCheckOut(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg glass-input text-slate-900 font-mono"
                 />
               </div>
@@ -350,7 +369,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
               <div className="flex items-end">
                 <button
                   type="submit"
-                  className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors"
+                  disabled={!attEmpId || !attDate}
+                  className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"
                 >
                   Save Entry
                 </button>
@@ -455,7 +475,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
               <Megaphone className="w-5 h-5 text-indigo-400" /> Broadcast Company Notice
             </h3>
 
-            <form onSubmit={handleAddNotice} className="space-y-3 text-xs bg-slate-100/60 p-4 rounded-xl border border-slate-200/60">
+            {noticeError && <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">{noticeError}</div>}
+            <form onSubmit={e => { e.preventDefault(); void publishNotice('Normal'); }} className="space-y-3 text-xs bg-slate-100/60 p-4 rounded-xl border border-slate-200/60">
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
                   <label className="block text-slate-600 font-semibold mb-1">Notice Title *</label>
@@ -468,18 +489,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
                     className="w-full px-3 py-2 rounded-lg glass-input text-slate-900"
                   />
                 </div>
-                <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Priority</label>
-                  <select
-                    value={newNoticePriority}
-                    onChange={e => setNewNoticePriority(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-lg glass-input text-slate-900"
-                  >
-                    <option value="Normal">Normal</option>
-                    <option value="Important">Important</option>
-                    <option value="Urgent">Urgent</option>
-                  </select>
-                </div>
+
               </div>
 
               <div>
@@ -494,9 +504,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
                 />
               </div>
 
-              <div className="flex justify-end">
-                <button type="submit" className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors">
+              <div className="flex flex-wrap justify-end gap-2">
+                <button type="button" onClick={() => publishNotice('Normal')} className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors">
                   Publish Notice
+                </button>
+                <button type="button" onClick={() => publishNotice('Urgent')} title="Shows a blocking popup on every employee's screen until they acknowledge it" className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold transition-colors flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> Publish as Urgent Notice
                 </button>
               </div>
             </form>
@@ -525,132 +538,85 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
       {activeTab === 'assets' && (
         <div className="space-y-6">
           <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4">
-            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <HardDrive className="w-5 h-5 text-indigo-400" /> Register & Assign Assets
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <HardDrive className="w-5 h-5 text-indigo-400" /> Assets Register
+              </h3>
+              <button
+                onClick={() => setShowAddAssetModal(true)}
+                className="px-4 py-2 rounded-xl glass-btn-primary text-white font-bold text-xs shadow-md"
+              >
+                + Add Asset
+              </button>
+            </div>
 
-            <form onSubmit={handleAddAsset} className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-100/60 p-4 rounded-xl border border-slate-200/60 text-xs">
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Asset Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="MacBook Pro 14 M3"
-                  value={newAssetName}
-                  onChange={e => setNewAssetName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg glass-input text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Category</label>
-                <select
-                  value={newAssetCategory}
-                  onChange={e => setNewAssetCategory(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg glass-input text-slate-900"
-                >
-                  <option value="Laptop">Laptop</option>
-                  <option value="Mobile">Mobile</option>
-                  <option value="Monitor">Monitor</option>
-                  <option value="Access Card">Access Card</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Serial Number</label>
-                <input
-                  type="text"
-                  placeholder="SN-0921"
-                  value={newAssetSerial}
-                  onChange={e => setNewAssetSerial(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg glass-input text-slate-900"
-                />
-              </div>
-
-              <div className="flex items-end">
-                <button type="submit" className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors">
-                  Register Asset
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4">
-            <h4 className="text-sm font-bold text-slate-800">Asset Inventory Log</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {assets.map(asset => (
-                <div key={asset.id} className="p-4 rounded-xl bg-slate-100/80 border border-slate-200 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-indigo-400 font-bold">{asset.assetCode}</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700">
-                      {asset.status}
-                    </span>
-                  </div>
-                  <h4 className="font-bold text-slate-900 text-sm">{asset.name}</h4>
-                  <div className="text-slate-500">Assigned To: {asset.assignedToName || 'Unassigned'}</div>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-slate-500">
+                    <th className="py-2 pr-3 font-semibold">Employee</th>
+                    <th className="py-2 pr-3 font-semibold">Type</th>
+                    <th className="py-2 pr-3 font-semibold">Model / Device ID</th>
+                    <th className="py-2 pr-3 font-semibold">Issued Date</th>
+                    <th className="py-2 pr-3 font-semibold">Renewal</th>
+                    <th className="py-2 pr-3 font-semibold">Status</th>
+                    <th className="py-2 pr-3 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {assets.map(asset => (
+                    <tr key={asset.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                      <td className="py-2.5 pr-3 font-semibold text-slate-900">{asset.assignedToName}</td>
+                      <td className="py-2.5 pr-3 capitalize text-slate-600">{asset.assetType}</td>
+                      <td className="py-2.5 pr-3 text-slate-600">{asset.modelName || asset.brandModel || asset.deviceId || '—'}</td>
+                      <td className="py-2.5 pr-3 text-slate-600">{asset.issuedDate}</td>
+                      <td className="py-2.5 pr-3"><AssetRenewalCell issuedDate={asset.issuedDate} returnDate={asset.returnDate} renewalIntervalDays={asset.renewalIntervalDays} /></td>
+                      <td className="py-2.5 pr-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          asset.status === 'active' ? 'bg-emerald-500/20 text-emerald-700'
+                          : asset.status === 'returned' ? 'bg-slate-400/20 text-slate-600'
+                          : 'bg-red-500/20 text-red-700'
+                        }`}>
+                          {asset.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setViewingAssetId(String(asset.id))}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 font-bold transition-colors"
+                          >
+                            View More
+                          </button>
+                          {asset.status === 'active' && (
+                            <button
+                              onClick={() => updateAssetStatus(String(asset.id), 'returned')}
+                              className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 font-bold transition-colors"
+                            >
+                              Mark Returned
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {assets.length === 0 && (
+                    <tr><td colSpan={7} className="py-6 text-center text-slate-400 italic">No assets registered yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       )}
 
+      {showAddAssetModal && <AddAssetModal onClose={() => setShowAddAssetModal(false)} />}
+      {viewingAssetId && <AssetDetailModal assetId={viewingAssetId} onClose={() => setViewingAssetId(null)} />}
+
       {/* 7. EMPLOYEE DETAILS & ACTIVE/PASSIVE TAB */}
       {activeTab === 'employees' && (
-        <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Users className="w-5 h-5 text-indigo-400" /> Employee Directory & Account Controls
-              </h3>
-              <p className="text-xs text-slate-500">Manage active vs passive employees and account activation</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {users.filter(u => u.role !== 'superadmin').map(emp => (
-              <div key={emp.id} className="p-4 rounded-xl bg-slate-100/80 border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
-                <div className="flex items-center gap-3">
-                  {emp.photoUrl ? (
-                    <img
-                      src={emp.photoUrl}
-                      alt={emp.name}
-                      className="w-10 h-10 rounded-xl object-cover border border-slate-200"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-xl bg-indigo-100 border border-slate-200 flex items-center justify-center text-indigo-700 font-bold text-sm shrink-0">
-                      {(emp.name || '?').trim().charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div>
-                    <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                      {emp.name}
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        emp.isActive ? 'bg-emerald-500/20 text-emerald-700' : 'bg-red-500/20 text-red-700'
-                      }`}>
-                        {emp.isActive ? 'Active Employee' : 'Passive / Deactivated'}
-                      </span>
-                    </div>
-                    <div className="text-slate-500 font-mono">
-                      {emp.employeeId || 'EMP-000'} | Code: {emp.employeeCode || 'NX-000'} | Role: {emp.role}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => toggleUserActiveStatus(emp.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-md flex items-center gap-1 ${
-                      emp.isActive ? 'bg-amber-600 hover:bg-amber-500 text-white transition-colors' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                    }`}
-                  >
-                    {emp.isActive ? <UserX className="w-3 h-3" /> : <UserCheck className="w-3 h-3" />}
-                    <span>{emp.isActive ? 'Deactivate Account' : 'Reactivate Account'}</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="p-4 sm:p-6 rounded-2xl bg-white border border-slate-200">
+          <EmployeeDirectoryPanel showAccountControls />
         </div>
       )}
 
@@ -703,62 +669,78 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab }) => 
               {generatedLinkInfo}
             </div>
           )}
+
+          <div className="pt-2">
+            <h4 className="text-sm font-bold text-slate-800 mb-3">Sent Invitations ({invitations.length})</h4>
+            <div className="space-y-2">
+              {invitations.length === 0 && (
+                <p className="text-xs text-slate-500 italic">No invitations sent yet.</p>
+              )}
+              {invitations.map(inv => (
+                <div key={inv.id} className="p-3 rounded-xl bg-slate-100/80 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div>
+                    <div className="font-bold text-slate-900">{inv.email}</div>
+                    <div className="text-slate-500 font-mono mt-0.5">
+                      Role: {inv.role === 'hr_manager' ? 'HR Manager' : 'Team Member'} · Sent: {inv.createdAt}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      inv.status === 'Accepted' ? 'bg-emerald-500/20 text-emerald-700'
+                      : inv.status === 'Expired' ? 'bg-slate-400/20 text-slate-600'
+                      : 'bg-amber-500/20 text-amber-700'
+                    }`}>
+                      {inv.status}
+                    </span>
+                    {inv.status !== 'Accepted' && (
+                      <button
+                        type="button"
+                        onClick={async (event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (!window.confirm(`Delete the pending invitation for ${inv.email}?`)) return;
+                          await deleteInvitationAction(inv.id);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 font-bold transition-colors"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-2">
+              To re-send an invitation to the same email, delete the old one here, then generate a new link above.
+            </p>
+          </div>
         </div>
       )}
 
       {/* 9. CONTRACT OVERVIEW TAB */}
       {activeTab === 'contracts' && (
-        <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <Briefcase className="w-5 h-5 text-indigo-400" /> Employment Contracts Overview
-          </h3>
-          <div className="space-y-3">
-            {contracts.map(cnt => (
-              <div key={cnt.id} className="p-4 rounded-xl bg-slate-100/80 border border-slate-200 flex items-center justify-between text-xs">
-                <div>
-                  <div className="font-bold text-slate-900 text-sm">{cnt.employeeName}</div>
-                  <div className="text-slate-500 font-mono">{cnt.contractCode} | {cnt.type} | Salary: ${cnt.salaryMonthly}/mo</div>
-                </div>
-                <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700">
-                  {cnt.status}
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="p-4 sm:p-6 rounded-2xl bg-white border border-slate-200">
+          <ContractOverviewPanel />
         </div>
       )}
 
       {/* 10. REPORT GENERATOR TAB */}
-      {activeTab === 'reports' && (
-        <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4 text-center">
-          <FileBadge className="w-12 h-12 text-indigo-400 mx-auto" />
-          <h3 className="text-lg font-bold text-slate-900">Generate Official HR Documents</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Generate printable contracts, salary increase letters, and performance appraisal certificates for any employee.
-          </p>
-          <button
-            onClick={() => setShowReportModal(true)}
-            className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors text-xs shadow-lg"
-          >
-            Launch Report Generator
-          </button>
-        </div>
+      {activeTab === 'documents' && <DocumentGeneratorPanel />}
+
+      {activeTab === 'audit_logs' && (
+        <div className="p-4 sm:p-6 rounded-2xl bg-white border border-slate-200"><AuditLogPanel /></div>
       )}
 
       {/* 11. MY PROFILE TAB */}
-      {activeTab === 'profile' && (
-        <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4">
-          <h3 className="text-lg font-bold text-slate-900">Admin Profile Settings</h3>
-          <p className="text-xs text-slate-600">Logged in as {currentUser.name} ({currentUser.email})</p>
-        </div>
-      )}
+      {activeTab === 'attendance_management' && <AttendanceManagementPanel role="admin" />}
+      {activeTab === 'attendance_settings' && <AttendancePolicyPanel />}
+      {activeTab === 'office_expenses' && <OfficeExpensesPanel canEdit />}
 
-      {/* Report Generator Modal */}
-      {showReportModal && (
-        <ReportGeneratorModal
-          onClose={() => setShowReportModal(false)}
-          preselectedEmployee={reportEmpTarget}
-        />
+      {activeTab === 'profile' && (
+        <div className="p-4 sm:p-6 rounded-2xl bg-white border border-slate-200 space-y-5">
+          <div className="border-b border-slate-200 pb-4"><h3 className="text-lg font-bold text-slate-900">My Admin Profile</h3><p className="text-xs text-slate-500 mt-1">Manage your own synced employee and contact record.</p></div>
+          <EmployeeProfileForm />
+        </div>
       )}
 
     </div>

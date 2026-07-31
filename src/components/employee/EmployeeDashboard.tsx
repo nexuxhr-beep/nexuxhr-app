@@ -1,28 +1,25 @@
+import { AttendanceManagementPanel } from '../common/AttendanceManagementPanel';
 import React, { useState } from 'react';
 import { useHR } from '../../context/HRContext';
-import { KanbanTaskBoard } from '../common/KanbanTaskBoard';
-import { DocumentUploader } from '../common/DocumentUploader';
+import { adToBs, formatBsNepali } from '../../lib/nepaliDate';
+import { UpcomingBirthdays } from '../common/UpcomingBirthdays';
+import { EmployeeRequestsPanel } from '../common/EmployeeRequestsPanel';
+import { EmployeeProfileForm } from '../common/EmployeeProfileForm';
+import { AssetDetailModal } from '../admin/AssetDetailModal';
+import { AddAssetModal } from '../admin/AddAssetModal';
 import {
-  Clock,
-  LogIn,
-  LogOut,
-  CalendarCheck,
+  BadgeCheck,
   Calendar,
+  CalendarCheck,
   CheckCircle2,
-  XCircle,
+  Clock,
   FileText,
-  Megaphone,
+  Fingerprint,
   HardDrive,
-  User,
-  HelpCircle,
-  DollarSign,
+  Megaphone,
   Plus,
   TrendingUp,
-  Download,
-  Building2,
-  Save,
-  Sparkles,
-  AlertCircle
+  User
 } from 'lucide-react';
 
 interface EmployeeDashboardProps {
@@ -34,13 +31,11 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
     currentUser,
     attendanceRecords,
     leaveRequests,
+    employeeRequests,
     tasks,
     notices,
     assets,
     salarySlips,
-    faqs,
-    checkInCurrentEmployee,
-    checkOutCurrentEmployee,
     submitLeaveRequest,
     updateCurrentUserProfile
   } = useHR();
@@ -79,21 +74,28 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
   const totalPresent = myMonthRecords.filter(r => r.status === 'Present' || r.status === 'Late').length;
   const totalAbsent = myMonthRecords.filter(r => r.status === 'Absent').length;
 
-  const handleLeaveSubmit = (e: React.FormEvent) => {
+  const [leaveError, setLeaveError] = useState('');
+  const [viewingAssetId, setViewingAssetId] = useState<string | null>(null);
+  const [showAddAssetModal, setShowAddAssetModal] = useState(false);
+  const handleLeaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    submitLeaveRequest({
-      employeeId: currentUser.employeeId || currentUser.id,
-      employeeName: currentUser.name,
-      designation: currentUser.designation || 'Team Member',
-      leaveType,
-      startDate: leaveStartDate || todayStr,
-      endDate: leaveEndDate || todayStr,
-      days: 2,
-      reason: leaveReason,
-    });
-    setShowLeaveModal(false);
-    setLeaveReason('');
+    setLeaveError('');
+    try {
+      await submitLeaveRequest({
+        leaveType,
+        startDate: leaveStartDate || todayStr,
+        endDate: leaveEndDate || todayStr,
+        days: 2,
+        reason: leaveReason,
+      });
+      setShowLeaveModal(false);
+      setLeaveReason('');
+    } catch (err: any) {
+      setLeaveError(err.message || 'Could not submit leave request.');
+    }
   };
+
+
 
   const handleProfileSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,47 +122,63 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
       {/* 1. HOME TAB */}
       {activeTab === 'home' && (
         <div className="space-y-6">
-          {/* Welcome & Time Check In/Out Hero Widget */}
-          <div className="p-6 rounded-2xl bg-gradient-to-r from-indigo-50 via-white to-indigo-50 border border-slate-200 shadow-xl flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div className="space-y-2 text-center lg:text-left">
-              <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-700 border border-indigo-500/30">
-                Employee Code: {currentUser.employeeCode || 'NX-003'} | ID: {currentUser.employeeId || 'EMP-2026-003'}
-              </span>
-              <h2 className="text-2xl font-black text-slate-900">Welcome Back, {currentUser.name}!</h2>
-              <p className="text-sm text-slate-600">
-                {currentUser.designation || 'Senior Team Member'} — {currentUser.companyName || 'Acme Software Solutions'}
-              </p>
-            </div>
+          {/* Welcome hero — attendance comes from the biometric device, not this app */}
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-r from-indigo-50 via-white to-indigo-50 p-6 shadow-xl">
+            <div className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full bg-indigo-100/50 blur-3xl" />
 
-            {/* Check in / Check out Action Box */}
-            <div className="bg-slate-100/90 border border-slate-200 p-4 rounded-xl flex items-center gap-4 shadow-lg shrink-0">
-              <div className="text-center pr-4 border-r border-slate-200">
-                <div className="text-[10px] uppercase font-bold text-slate-500">Today's Status</div>
-                <div className="text-xs font-bold text-emerald-400 mt-1 flex items-center justify-center gap-1">
-                  <CheckCircle2 className="w-4 h-4" />
-                  {myTodayAtt ? myTodayAtt.status : 'Not Checked In'}
-                </div>
-                {myTodayAtt?.checkIn && (
-                  <div className="text-[10px] text-slate-500 mt-0.5">In: {myTodayAtt.checkIn}</div>
+            <div className="relative flex flex-col items-center gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-4 text-center lg:text-left">
+                {currentUser.photoUrl ? (
+                  <img
+                    src={currentUser.photoUrl}
+                    alt={currentUser.name}
+                    className="h-16 w-16 shrink-0 rounded-2xl border-2 border-white object-cover shadow-md"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-white bg-indigo-600 text-2xl font-black text-white shadow-md">
+                    {(currentUser.name || '?').trim().charAt(0).toUpperCase()}
+                  </div>
                 )}
+
+                <div className="space-y-1.5">
+                  <h2 className="text-2xl font-black leading-tight text-slate-900">
+                    Welcome back, {(currentUser.name || '').split(' ')[0]}
+                  </h2>
+                  <p className="text-sm text-slate-600">
+                    {currentUser.designation || 'Designation not assigned'}
+                    <span className="mx-1.5 text-slate-300">|</span>
+                    {currentUser.companyName || 'Company not assigned'}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-0.5 lg:justify-start">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white/80 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
+                      <BadgeCheck className="h-3.5 w-3.5" />
+                      {currentUser.employeeCode || 'Code not assigned'}
+                    </span>
+                    <span className="nx-nepali text-[11px] text-slate-500">
+                      {formatBsNepali(adToBs(new Date()))}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                {!myTodayAtt?.checkIn ? (
-                  <button
-                    onClick={() => checkInCurrentEmployee('Checked in via Dashboard')}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors text-xs shadow-md flex items-center gap-2 transition-all"
-                  >
-                    <LogIn className="w-4 h-4" /> Check In
-                  </button>
-                ) : (
-                  <button
-                    onClick={checkOutCurrentEmployee}
-                    className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white transition-colors font-bold text-xs shadow-md flex items-center gap-2 transition-all"
-                  >
-                    <LogOut className="w-4 h-4" /> Check Out
-                  </button>
-                )}
+              {/* Today's status — read only, sourced from the door device */}
+              <div className="w-full shrink-0 rounded-xl border border-slate-200 bg-white/80 p-4 shadow-sm sm:w-auto">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  Today&apos;s Status
+                </div>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <CheckCircle2 className={`h-5 w-5 ${myTodayAtt ? 'text-emerald-500' : 'text-slate-300'}`} />
+                  <span className="text-lg font-black text-slate-900">
+                    {myTodayAtt ? myTodayAtt.status : 'No punch yet'}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center gap-4 border-t border-slate-200 pt-2 font-mono text-[11px] text-slate-500">
+                  <span>In: <span className="font-bold text-slate-700">{myTodayAtt?.checkIn || '—'}</span></span>
+                  <span>Out: <span className="font-bold text-slate-700">{myTodayAtt?.checkOut || '—'}</span></span>
+                </div>
+                <p className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
+                  <Fingerprint className="h-3 w-3" /> Recorded by the office biometric device
+                </p>
               </div>
             </div>
           </div>
@@ -180,9 +198,11 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
 
             <div className="p-4 rounded-xl bg-white border border-slate-200 flex items-center justify-between transition-all duration-200 hover:border-slate-600 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20">
               <div>
-                <div className="text-xs text-slate-500 font-medium">Leave Balance</div>
-                <div className="text-xl font-bold text-slate-900 mt-1">14 Days Left</div>
-                <div className="text-[10px] text-indigo-400 mt-0.5">Annual + Casual Pool</div>
+                <div className="text-xs text-slate-500 font-medium">My Leave Requests</div>
+                <div className="text-xl font-bold text-slate-900 mt-1">
+                  {employeeRequests.filter(r => r.status === 'Pending').length} Pending
+                </div>
+                <div className="text-[10px] text-indigo-400 mt-0.5">{employeeRequests.length} total submitted</div>
               </div>
               <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                 <FileText className="w-6 h-6" />
@@ -191,11 +211,11 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
 
             <div className="p-4 rounded-xl bg-white border border-slate-200 flex items-center justify-between transition-all duration-200 hover:border-slate-600 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20">
               <div>
-                <div className="text-xs text-slate-500 font-medium">My Open Tasks</div>
+                <div className="text-xs text-slate-500 font-medium">My Task</div>
                 <div className="text-xl font-bold text-slate-900 mt-1">
                   {tasks.filter(t => t.assignedTo === currentUser.employeeId || t.assignedTo === currentUser.id).length} Tasks
                 </div>
-                <div className="text-[10px] text-amber-400 mt-0.5">Kanban Board Ready</div>
+                <div className="text-[10px] text-amber-400 mt-0.5">Assigned by Admin/HR</div>
               </div>
               <div className="p-3 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
                 <Clock className="w-6 h-6" />
@@ -206,14 +226,19 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
               <div>
                 <div className="text-xs text-slate-500 font-medium">Assigned Hardware</div>
                 <div className="text-xl font-bold text-slate-900 mt-1">
-                  {assets.filter(a => a.assignedTo === currentUser.employeeId || a.assignedTo === currentUser.id).length} Items
+                  {assets.filter(a => String(a.assignedToUserId) === currentUser.id).length} Items
                 </div>
-                <div className="text-[10px] text-purple-400 mt-0.5">Laptop & Peripherals</div>
+                <div className="text-[10px] text-purple-400 mt-0.5">Devices &amp; equipment</div>
               </div>
               <div className="p-3 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
                 <HardDrive className="w-6 h-6" />
               </div>
             </div>
+          </div>
+
+          {/* Upcoming birthdays */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <UpcomingBirthdays />
           </div>
 
           {/* Upcoming Events & Present Graphs Section */}
@@ -225,7 +250,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
                 <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-indigo-400" /> Monthly Attendance Summary & Hours
                 </h3>
-                <span className="text-xs text-slate-500 font-mono">July 2026</span>
+                <span className="text-xs text-slate-500 font-mono">{new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</span>
               </div>
 
               <div className="space-y-3 pt-2">
@@ -239,7 +264,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
                       </div>
                     </div>
                     <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700">
-                      {rec.status} ({rec.workHours || 8} hrs)
+                      {rec.status}{rec.workHours != null ? ` (${rec.workHours} hrs)` : ''}
                     </span>
                   </div>
                 ))}
@@ -253,16 +278,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
               </h3>
 
               <div className="space-y-3">
-                <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-500/30 text-xs space-y-1">
-                  <div className="font-bold text-indigo-700">Company Mid-Year Townhall</div>
-                  <div className="text-[11px] text-slate-600">July 30, 2026 • 3:00 PM EST</div>
-                  <div className="text-[10px] text-slate-500">Q4 roadmap presentation & Q&A session.</div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-500/30 text-xs space-y-1">
-                  <div className="font-bold text-purple-700">Quarterly Performance Reviews</div>
-                  <div className="text-[11px] text-slate-600">August 05, 2026</div>
-                  <div className="text-[10px] text-slate-500">Self-evaluations submission deadline.</div>
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                  <p className="text-xs text-slate-500">No upcoming events yet.</p>
                 </div>
               </div>
             </div>
@@ -272,7 +289,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
       )}
 
       {/* 2. MY TASKS (KANBAN) TAB */}
-      {activeTab === 'tasks' && <KanbanTaskBoard />}
 
       {/* 3. MY ATTENDANCE TAB */}
       {activeTab === 'my_attendance' && (
@@ -331,101 +347,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
       )}
 
       {/* 4. REQUESTS & FAQS TAB */}
-      {activeTab === 'requests' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between bg-white p-5 rounded-2xl border border-slate-200">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <HelpCircle className="w-5 h-5 text-indigo-400" /> Employee Requests & FAQs
-              </h3>
-              <p className="text-xs text-slate-500">Submit leave requests, request official salary slips, or search HR FAQs</p>
-            </div>
-            <button
-              onClick={() => setShowLeaveModal(true)}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors text-xs shadow-lg flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" /> Request Leave
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* My Leave Requests Tracker */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4">
-              <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-indigo-400" /> My Leave Requests History
-              </h4>
-
-              <div className="space-y-3">
-                {leaveRequests
-                  .filter(l => l.employeeId === currentUser.employeeId || l.employeeId === currentUser.id)
-                  .map(req => (
-                    <div key={req.id} className="p-3.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-800">{req.leaveType} ({req.days} Days)</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          req.status === 'Approved' ? 'bg-emerald-500/20 text-emerald-700' :
-                          req.status === 'Pending' ? 'bg-amber-500/20 text-amber-700' : 'bg-red-500/20 text-red-700'
-                        }`}>
-                          {req.status}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        {req.startDate} to {req.endDate}
-                      </div>
-                      <p className="text-slate-600 text-[11px]">Reason: {req.reason}</p>
-                      {req.reviewComment && (
-                        <div className="text-[10px] text-indigo-700 italic pt-1 border-t border-slate-200/60">
-                          HR Comment: {req.reviewComment} ({req.reviewedBy})
-                        </div>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            </div>
-
-            {/* Salary Slips Downloads */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4">
-              <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-emerald-400" /> Salary Slip Request & Download
-              </h4>
-
-              <div className="space-y-3">
-                {salarySlips.map(slip => (
-                  <div key={slip.id} className="p-3.5 rounded-xl bg-slate-100/80 border border-slate-200 flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-slate-800">{slip.month} Payslip</div>
-                      <div className="text-[11px] text-emerald-400 font-mono font-bold">Net Pay: ${slip.netPay.toLocaleString()} USD</div>
-                      <div className="text-[10px] text-slate-500">Issued: {slip.issuedDate}</div>
-                    </div>
-                    <button
-                      onClick={() => setSelectedPayslip(slip)}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors text-[11px] flex items-center gap-1.5 shadow-md"
-                    >
-                      <Download className="w-3.5 h-3.5" /> View Payslip
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-
-          {/* FAQs Accordion */}
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4">
-            <h4 className="text-sm font-bold text-slate-800">Frequently Asked Questions (FAQs)</h4>
-            <div className="space-y-3">
-              {faqs.map(faq => (
-                <div key={faq.id} className="p-3.5 rounded-xl bg-slate-100/60 border border-slate-200/60 text-xs space-y-1">
-                  <div className="font-bold text-indigo-700">{faq.question}</div>
-                  <p className="text-slate-600 leading-relaxed text-[11px]">{faq.answer}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
+      {activeTab === 'requests' && <EmployeeRequestsPanel />}
       {/* 5. UPCOMING NOTICES TAB */}
       {activeTab === 'notices' && (
         <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4">
@@ -455,124 +377,66 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
       {/* 6. ASSETS REGISTER TAB */}
       {activeTab === 'assets' && (
         <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <HardDrive className="w-5 h-5 text-indigo-400" /> My Assigned Assets Register
-          </h3>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <HardDrive className="w-5 h-5 text-indigo-400" /> My Assets Register
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">Register the device issued to you. After submission, Admin or HR can review and edit the record.</p>
+            </div>
+            <button
+              onClick={() => setShowAddAssetModal(true)}
+              className="glass-btn-primary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-extrabold text-white"
+            >
+              <Plus className="h-4 w-4" /> Register My Asset
+            </button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {assets
-              .filter(a => a.assignedTo === currentUser.employeeId || a.assignedTo === currentUser.id)
+              .filter(a => String(a.assignedToUserId) === currentUser.id)
               .map(asset => (
                 <div key={asset.id} className="p-4 rounded-xl bg-slate-100/80 border border-slate-200 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs text-indigo-400 font-bold">{asset.assetCode}</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700">
+                    <span className="font-mono text-xs text-indigo-400 font-bold capitalize">{asset.assetType}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      asset.status === 'active' ? 'bg-emerald-500/20 text-emerald-700'
+                      : asset.status === 'returned' ? 'bg-slate-400/20 text-slate-600'
+                      : 'bg-red-500/20 text-red-700'
+                    }`}>
                       {asset.status}
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900">{asset.name}</h4>
-                  <p className="text-xs text-slate-500">Category: {asset.category}</p>
-                  {asset.serialNumber && <p className="text-[10px] font-mono text-slate-500">S/N: {asset.serialNumber}</p>}
+                  <h4 className="text-sm font-bold text-slate-900">{asset.modelName || asset.brandModel || 'Device'}</h4>
+                  <p className="text-xs text-slate-500">Issued: {asset.issuedDate}</p>
+                  <button
+                    onClick={() => setViewingAssetId(String(asset.id))}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                  >
+                    View More →
+                  </button>
                 </div>
               ))}
+            {assets.filter(a => String(a.assignedToUserId) === currentUser.id).length === 0 && (
+              <p className="text-xs text-slate-500 italic">No assets assigned to you yet.</p>
+            )}
           </div>
         </div>
       )}
+      {showAddAssetModal && <AddAssetModal onClose={() => setShowAddAssetModal(false)} />}
+      {viewingAssetId && <AssetDetailModal assetId={viewingAssetId} onClose={() => setViewingAssetId(null)} />}
 
       {/* 7. MY PROFILE TAB */}
+      {activeTab === 'attendance_management' && <AttendanceManagementPanel role="team_member" />}
+
       {activeTab === 'profile' && (
-        <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <User className="w-5 h-5 text-indigo-400" /> My Employee Profile & Documents
-              </h3>
-              <p className="text-xs text-slate-500">Update personal details, emergency contacts, and upload official photos</p>
-            </div>
-            {savedSuccess && (
-              <span className="px-3 py-1 rounded-xl bg-emerald-500/20 text-emerald-700 text-xs font-bold border border-emerald-500/30">
-                ✓ Profile Saved Successfully!
-              </span>
-            )}
+        <div className="p-4 sm:p-6 rounded-2xl bg-white border border-slate-200 space-y-5">
+          <div className="border-b border-slate-200 pb-4">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <User className="w-5 h-5 text-indigo-500" /> My Employee Profile & Documents
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">Complete your personal, organisational, bank, government ID, emergency and document records. Admin and HR can review or edit the same synced profile.</p>
           </div>
-
-          <form onSubmit={handleProfileSave} className="space-y-6 text-xs">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Full Employee Name</label>
-                <input
-                  type="text"
-                  value={profileName}
-                  onChange={e => setProfileName(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Designation</label>
-                <input
-                  type="text"
-                  value={profileDesignation}
-                  onChange={e => setProfileDesignation(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Date of Birth</label>
-                <input
-                  type="date"
-                  value={profileDob}
-                  onChange={e => setProfileDob(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Citizenship & PAN (Optional)</label>
-                <input
-                  type="text"
-                  value={citizenshipPan}
-                  onChange={e => setCitizenshipPan(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Emergency Phone Number</label>
-                <input
-                  type="text"
-                  value={emergencyPhone}
-                  onChange={e => setEmergencyPhone(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Guardian Phone Number</label>
-                <input
-                  type="text"
-                  value={guardianPhone}
-                  onChange={e => setGuardianPhone(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-800"
-                />
-              </div>
-            </div>
-
-            {/* Document Uploader */}
-            <DocumentUploader
-              documents={currentUser.documents}
-              onChange={docs => updateCurrentUserProfile({ documents: docs })}
-            />
-
-            <div className="flex justify-end pt-4 border-t border-slate-200">
-              <button
-                type="submit"
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors text-xs shadow-lg flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" /> Save Profile Updates
-              </button>
-            </div>
-          </form>
+          <EmployeeProfileForm />
         </div>
       )}
 
@@ -581,6 +445,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="glass-modal border border-slate-900/10 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <h3 className="text-base font-bold text-slate-900">Submit New Leave Request</h3>
+            {leaveError && <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">{leaveError}</div>}
             <form onSubmit={handleLeaveSubmit} className="space-y-3 text-xs">
               <div>
                 <label className="block text-slate-600 font-semibold mb-1">Leave Type</label>
@@ -664,7 +529,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeTab 
 
             <div className="space-y-2 text-xs">
               <div className="flex justify-between"><span>Employee Name:</span><strong>{currentUser.name}</strong></div>
-              <div className="flex justify-between"><span>Employee ID:</span><strong>{currentUser.employeeId || 'EMP-2026-003'}</strong></div>
+              <div className="flex justify-between"><span>Employee ID:</span><strong>{currentUser.employeeId || currentUser.id}</strong></div>
               <div className="flex justify-between"><span>Basic Salary:</span><span>${selectedPayslip.basicSalary.toLocaleString()}</span></div>
               <div className="flex justify-between"><span>Allowances:</span><span>+${selectedPayslip.allowances.toLocaleString()}</span></div>
               <div className="flex justify-between"><span>Deductions:</span><span>-${selectedPayslip.deductions.toLocaleString()}</span></div>

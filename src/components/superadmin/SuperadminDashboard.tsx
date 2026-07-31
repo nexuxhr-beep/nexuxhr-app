@@ -23,36 +23,35 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
   const {
     organizations,
     auditLogs,
-    addOrganization,
-    updateOrganizationStatus,
-    updateOrganizationPlan
+    updateOrganizationPlan,
+    companies,
+    createCompanyAndInviteAdmin,
+    setCompanyStatus
   } = useHR();
 
-  // New Organization Form
-  const [newOrgName, setNewOrgName] = useState('');
-  const [newOrgCode, setNewOrgCode] = useState('');
-  const [newOrgEmail, setNewOrgEmail] = useState('');
-  const [newOrgPlan, setNewOrgPlan] = useState<Organization['plan']>('Growth');
+  // Real company + admin invite
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newCompanyAdminEmail, setNewCompanyAdminEmail] = useState('');
+  const [companySending, setCompanySending] = useState(false);
+  const [companyError, setCompanyError] = useState('');
+  const [companyMessage, setCompanyMessage] = useState('');
 
-  const handleCreateOrg = (e: React.FormEvent) => {
+  const handleCreateCompanyInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newOrgName.trim()) return;
-
-    addOrganization({
-      name: newOrgName,
-      code: newOrgCode || newOrgName.substring(0, 4).toUpperCase(),
-      plan: newOrgPlan,
-      billingCycle: 'Monthly',
-      activeEmployeesCount: 1,
-      maxEmployees: newOrgPlan === 'Enterprise' ? 200 : newOrgPlan === 'Growth' ? 50 : 15,
-      status: 'Active',
-      renewalDate: '2027-01-01',
-      contactEmail: newOrgEmail || 'contact@org.com'
-    });
-
-    setNewOrgName('');
-    setNewOrgCode('');
-    setNewOrgEmail('');
+    if (!newCompanyName.trim() || !newCompanyAdminEmail.trim()) return;
+    setCompanySending(true);
+    setCompanyError('');
+    setCompanyMessage('');
+    try {
+      await createCompanyAndInviteAdmin(newCompanyName.trim(), newCompanyAdminEmail.trim());
+      setCompanyMessage(`"${newCompanyName.trim()}" created — an invitation email was sent to ${newCompanyAdminEmail.trim()}.`);
+      setNewCompanyName('');
+      setNewCompanyAdminEmail('');
+    } catch (err: any) {
+      setCompanyError(err.message || 'Could not create the company.');
+    } finally {
+      setCompanySending(false);
+    }
   };
 
   return (
@@ -79,95 +78,87 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
         <div className="space-y-6">
           <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4">
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-purple-400" /> Provision New Company / Organization
+              <Building2 className="w-5 h-5 text-purple-400" /> Create Company & Invite its Admin
             </h3>
+            <p className="text-xs text-slate-500">
+              Creates the company and emails the owner an invitation link. They set their own password — you never see it.
+            </p>
 
-            <form onSubmit={handleCreateOrg} className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-100/60 p-4 rounded-xl border border-slate-200/60 text-xs">
+            {companyError && <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">{companyError}</div>}
+            {companyMessage && <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs">{companyMessage}</div>}
+
+            <form onSubmit={handleCreateCompanyInvite} className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-100/60 p-4 rounded-xl border border-slate-200/60 text-xs">
               <div>
                 <label className="block text-slate-600 font-semibold mb-1">Company Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="Apex Global Innovations"
-                  value={newOrgName}
-                  onChange={e => setNewOrgName(e.target.value)}
+                  value={newCompanyName}
+                  onChange={e => setNewCompanyName(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg glass-input text-slate-900"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-600 font-semibold mb-1">Company Code</label>
+                <label className="block text-slate-600 font-semibold mb-1">Owner / Admin Email *</label>
                 <input
-                  type="text"
-                  placeholder="APEX"
-                  value={newOrgCode}
-                  onChange={e => setNewOrgCode(e.target.value)}
+                  type="email"
+                  required
+                  placeholder="owner@company.com"
+                  value={newCompanyAdminEmail}
+                  onChange={e => setNewCompanyAdminEmail(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg glass-input text-slate-900"
                 />
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Subscription Plan</label>
-                <select
-                  value={newOrgPlan}
-                  onChange={e => setNewOrgPlan(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-lg glass-input text-slate-900"
-                >
-                  <option value="Starter">Starter (Up to 15 seats)</option>
-                  <option value="Growth">Growth (Up to 50 seats)</option>
-                  <option value="Enterprise">Enterprise (Up to 200 seats)</option>
-                </select>
               </div>
 
               <div className="flex items-end">
-                <button type="submit" className="w-full py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold transition-colors">
-                  Provision Organization
+                <button disabled={companySending} type="submit" className="w-full py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold transition-colors disabled:opacity-60">
+                  {companySending ? 'Sending invite...' : 'Create & Invite Admin'}
                 </button>
               </div>
             </form>
           </div>
 
           <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4">
-            <h4 className="text-sm font-bold text-slate-800">Registered Companies & Status ({organizations.length})</h4>
+            <h4 className="text-sm font-bold text-slate-800">Companies ({companies.length})</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {organizations.map(org => (
-                <div key={org.id} className="p-4 rounded-xl bg-slate-100/80 border border-slate-200 space-y-3 text-xs transition-all duration-200 hover:border-slate-600 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20">
+              {companies.length === 0 && (
+                <p className="text-xs text-slate-500 italic">No companies created yet.</p>
+              )}
+              {companies.map(co => (
+                <div key={co.id} className="p-4 rounded-xl bg-slate-100/80 border border-slate-200 space-y-3 text-xs transition-all duration-200 hover:border-slate-600 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-purple-400 font-bold">{org.code}</span>
+                    <span className="font-mono text-purple-400 font-bold">{co.code}</span>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      org.status === 'Active' ? 'bg-emerald-500/20 text-emerald-700' : 'bg-amber-500/20 text-amber-700'
+                      co.status === 'active' ? 'bg-emerald-500/20 text-emerald-700' : 'bg-amber-500/20 text-amber-700'
                     }`}>
-                      {org.status}
+                      {co.status}
                     </span>
                   </div>
 
                   <div>
-                    <h4 className="font-bold text-slate-900 text-base">{org.name}</h4>
-                    <p className="text-slate-500 font-mono mt-0.5">{org.contactEmail}</p>
+                    <h4 className="font-bold text-slate-900 text-base">{co.name}</h4>
+                    <p className="text-slate-500 font-mono mt-0.5">
+                      {co.adminEmail ? co.adminEmail : 'Admin invite pending'}
+                    </p>
                   </div>
 
                   <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
-                    <span className="text-slate-600">Plan: <strong>{org.plan}</strong></span>
-                    <span className="text-slate-500">{org.activeEmployeesCount} / {org.maxEmployees} Seats</span>
+                    <span className="text-slate-600">Admin: <strong>{co.adminName || 'Not signed up yet'}</strong></span>
+                    <span className="text-slate-500">{co.employeeCount} employees</span>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-2">
-                    {org.status === 'Active' ? (
-                      <button
-                        onClick={() => updateOrganizationStatus(org.id, 'Suspended')}
-                        className="w-full py-1.5 rounded-lg bg-red-50 text-red-700 border border-red-500/30 hover:bg-red-900 font-bold transition-colors"
-                      >
-                        Suspend Access
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => updateOrganizationStatus(org.id, 'Active')}
-                        className="w-full py-1.5 rounded-lg bg-emerald-950/80 text-emerald-700 border border-emerald-500/30 hover:bg-emerald-900 font-bold transition-colors"
-                      >
-                        Reactivate Access
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    onClick={() => setCompanyStatus(co.id, co.status === 'active' ? 'suspended' : 'active')}
+                    className={`w-full py-1.5 rounded-lg font-bold transition-colors border ${
+                      co.status === 'active'
+                        ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                    }`}
+                  >
+                    {co.status === 'active' ? 'Suspend Access' : 'Reactivate Access'}
+                  </button>
                 </div>
               ))}
             </div>

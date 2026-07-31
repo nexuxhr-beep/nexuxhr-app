@@ -1,4 +1,26 @@
+# ==================================================
+# NexuxHR API - .htaccess
+# ==================================================
+
 Options -Indexes
-<FilesMatch "^(config\.php|config\.example\.php|schema\.sql)$">
-  Require all denied
+
+<IfModule mod_headers.c>
+
+# CORS is handled by index.php.
+# These headers are safe to send globally.
+Header always set Access-Control-Allow-Methods "POST, OPTIONS"
+Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept"
+Header always set Access-Control-Max-Age "86400"
+
+</IfModule>
+
+# Protect sensitive files
+<FilesMatch "^(config\.php|config\.example\.php|schema\.sql|\.env)$">
+    Require all denied
 </FilesMatch>
+
+# Disable directory listing
+Options -Indexes
+
+# PHP error logging (optional)
+php_flag display_errors Off
