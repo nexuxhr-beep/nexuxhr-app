@@ -672,3 +672,69 @@
 .nx-nepali-datetime {
   font-variant-numeric: tabular-nums;
 }
+
+
+/* ==========================================================================
+   NexuxHR v1.0 launch system
+   Restrained enterprise motion, neutral surfaces and consistent interaction.
+   ========================================================================== */
+:root{
+  --nx-bg:#f7f9fc;
+  --nx-surface:#ffffff;
+  --nx-border:#e2e8f0;
+  --nx-border-strong:#cbd5e1;
+  --nx-text:#0f172a;
+  --nx-muted:#64748b;
+  --nx-primary:#4f46e5;
+  --nx-primary-hover:#4338ca;
+  --nx-radius:14px;
+  --nx-shadow:0 6px 20px rgba(15,23,42,.055);
+  --nx-motion:cubic-bezier(.2,.8,.2,1);
+}
+.nx-app-shell{background:var(--nx-bg)}
+.nx-surface{
+  background:var(--nx-surface);
+  border:1px solid var(--nx-border);
+  box-shadow:var(--nx-shadow);
+}
+.app-header-modern{
+  background:rgba(255,255,255,.96);
+  border-color:var(--nx-border);
+  box-shadow:0 4px 18px rgba(15,23,42,.055);
+}
+.nx-icon-button{
+  min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--nx-border);background:#fff;color:#475569;
+  transition:transform 150ms var(--nx-motion),border-color 150ms var(--nx-motion),background 150ms var(--nx-motion),color 150ms var(--nx-motion);
+}
+.nx-icon-button:hover{border-color:var(--nx-border-strong);background:#f8fafc;color:var(--nx-text)}
+.nx-icon-button:active{transform:scale(.965)}
+.nx-primary-button{
+  background:var(--nx-primary);border:1px solid var(--nx-primary);box-shadow:none;
+  transition:transform 150ms var(--nx-motion),background 150ms var(--nx-motion);
+}
+.nx-primary-button:hover{background:var(--nx-primary-hover)}
+.nx-primary-button:active{transform:scale(.985)}
+.nx-company-card{
+  background:#fff;border:1px solid var(--nx-border);box-shadow:none;
+  transition:transform 170ms var(--nx-motion),border-color 170ms var(--nx-motion),box-shadow 170ms var(--nx-motion);
+}
+.nx-company-card:hover{transform:translateY(-1px);border-color:#cbd5e1;box-shadow:0 7px 20px rgba(15,23,42,.05)}
+.nx-page-enter{animation:nx-page-enter 180ms var(--nx-motion) both}
+@keyframes nx-page-enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+button,a,[role="button"]{ -webkit-tap-highlight-color:transparent }
+button{transition:transform 150ms var(--nx-motion),background-color 150ms var(--nx-motion),border-color 150ms var(--nx-motion),color 150ms var(--nx-motion),opacity 150ms var(--nx-motion)}
+button:active:not(:disabled){transform:scale(.985)}
+input,select,textarea{
+  transition:border-color 150ms var(--nx-motion),box-shadow 150ms var(--nx-motion),background 150ms var(--nx-motion);
+}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#818cf8!important;box-shadow:0 0 0 3px rgba(99,102,241,.11)!important}
+table tbody tr{transition:background-color 140ms ease}
+.rounded-2xl.bg-white.border.border-slate-200,
+.rounded-xl.bg-white.border.border-slate-200{
+  box-shadow:0 3px 14px rgba(15,23,42,.035);
+}
+[class*="shadow-2xl"]{box-shadow:0 18px 50px rgba(15,23,42,.16)!important}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
+}

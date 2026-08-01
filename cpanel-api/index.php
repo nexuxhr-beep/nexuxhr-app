@@ -26,6 +26,20 @@ if (!file_exists($configFile)) {
 $config = require $configFile;
 
 /*
+ * Launch-safe frontend URL normalization.
+ * Older installs stored localhost in config.php, which produced unusable links
+ * in invitation and password-reset emails. Environment variables take priority.
+ */
+$launchAppUrl = getenv('NEXUXHR_APP_URL') ?: 'https://nexux-hr-app.vercel.app';
+if (empty($config['app_url']) || str_contains((string)$config['app_url'], 'localhost') || str_contains((string)$config['app_url'], '127.0.0.1')) {
+  $config['app_url'] = $launchAppUrl;
+}
+$config['allowed_origins'] = array_values(array_unique(array_merge(
+  is_array($config['allowed_origins'] ?? null) ? $config['allowed_origins'] : [],
+  ['https://nexux-hr-app.vercel.app', 'https://app.nexuxhr.com']
+)));
+
+/*
 |--------------------------------------------------------------------------
 | CORS
 |--------------------------------------------------------------------------
@@ -100,6 +114,7 @@ try {
     case 'create_company_invite': createCompanyInvite($pdo, $config, $input); break;
     case 'list_companies': listCompanies($pdo); break;
     case 'update_company_status': updateCompanyStatus($pdo, $input); break;
+    case 'delete_company': deleteCompany($pdo, $input); break;
 
     // Invitations (admin / hr_manager, scoped to their own company)
     case 'create_invitation': createInvitation($pdo, $config, $input); break;
@@ -343,7 +358,7 @@ function createCompanyInvite(PDO $pdo, array $config, array $in): never {
   $companyId = (int)$pdo->lastInsertId();
 
   $pdo->prepare('UPDATE invitations SET expires_at=NOW() WHERE email=? AND used_at IS NULL')->execute([$adminEmail]);
-  $inviteCode = 'INV-' . random_int(10000, 99999);
+  $inviteCode = 'INV-' . strtoupper(bin2hex(random_bytes(6)));
   $days = 7;
   $pdo->prepare('INSERT INTO invitations(email,invitation_code,role,company_id,expires_at) VALUES(?,?,?,?,DATE_ADD(NOW(), INTERVAL ? DAY))')
     ->execute([$adminEmail, $inviteCode, 'admin', $companyId, $days]);
@@ -367,6 +382,53 @@ function updateCompanyStatus(PDO $pdo, array $in): never {
     $pdo->prepare('UPDATE auth_sessions SET revoked_at=NOW() WHERE user_id IN (SELECT id FROM users WHERE company_id=?) AND revoked_at IS NULL')->execute([$companyId]);
   }
   ok(['message' => 'Company status updated.']);
+}
+
+
+function deleteCompany(PDO $pdo, array $in): never {
+  $actor = requireSuperadmin($pdo);
+  $companyId = (int)($in['companyId'] ?? 0);
+  $confirmationName = trim((string)($in['confirmationName'] ?? ''));
+  $company = one($pdo, 'SELECT * FROM companies WHERE id=?', [$companyId]);
+  if (!$company) throw new DomainException('Company not found.');
+  if (strcasecmp($confirmationName, (string)$company['name']) !== 0) {
+    throw new DomainException('Company name confirmation does not match.');
+  }
+  if ((int)($actor['company_id'] ?? 0) === $companyId) {
+    throw new DomainException('You cannot delete the company attached to your current superadmin account.');
+  }
+
+  $pdo->beginTransaction();
+  try {
+    $tables = [
+      'notice_acknowledgements','asset_photos','office_expense_photos',
+      'attendance_corrections','attendance_records','attendance_month_locks',
+      'leave_records','leave_requests','employee_documents','employee_contracts',
+      'generated_hr_documents','company_letterheads','employee_requests','tasks',
+      'notifications','notices','assets','office_expenses','employee_profiles',
+      'attendance_policies','attendance_shifts','invitations','audit_logs'
+    ];
+    foreach ($tables as $table) {
+      $exists = one($pdo, 'SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?', [$table]);
+      if (!$exists || (int)$exists['c'] === 0) continue;
+      $columns = $pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_COLUMN);
+      if (in_array('company_id', $columns, true)) {
+        $pdo->prepare("DELETE FROM `{$table}` WHERE company_id=?")->execute([$companyId]);
+      } elseif (in_array('user_id', $columns, true)) {
+        $pdo->prepare("DELETE FROM `{$table}` WHERE user_id IN (SELECT id FROM users WHERE company_id=?)")->execute([$companyId]);
+      }
+    }
+    $pdo->prepare('DELETE FROM auth_sessions WHERE user_id IN (SELECT id FROM users WHERE company_id=?)')->execute([$companyId]);
+    $pdo->prepare('DELETE FROM auth_otps WHERE email IN (SELECT email FROM users WHERE company_id=?)')->execute([$companyId]);
+    $pdo->prepare('DELETE FROM password_resets WHERE email IN (SELECT email FROM users WHERE company_id=?)')->execute([$companyId]);
+    $pdo->prepare('DELETE FROM users WHERE company_id=?')->execute([$companyId]);
+    $pdo->prepare('DELETE FROM companies WHERE id=?')->execute([$companyId]);
+    $pdo->commit();
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    throw $e;
+  }
+  ok(['message' => 'Company and related tenant data deleted.']);
 }
 
 function listCompanies(PDO $pdo): never {
@@ -419,14 +481,20 @@ function createInvitation(PDO $pdo, array $config, array $in): never {
   $company = one($pdo, 'SELECT name FROM companies WHERE id=?', [$companyId]);
 
   $pdo->prepare('UPDATE invitations SET expires_at=NOW() WHERE email=? AND used_at IS NULL')->execute([$email]);
-  $code = 'INV-' . random_int(10000, 99999);
+  $code = 'INV-' . strtoupper(bin2hex(random_bytes(6)));
   $days = 7;
   $pdo->prepare('INSERT INTO invitations(email,invitation_code,role,company_id,expires_at) VALUES(?,?,?,?,DATE_ADD(NOW(), INTERVAL ? DAY))')
     ->execute([$email, $code, $role, $companyId, $days]);
 
   $link = rtrim($config['app_url'], '/') . '/?invite=' . rawurlencode($code) . '&email=' . rawurlencode($email);
   $companyName = $company ? $company['name'] : 'NexuxHR';
-  $roleLabel = $role === 'hr_manager' ? 'HR Manager' : 'Team Member';
+  $roleLabels = [
+    'hr_manager' => 'HR Manager',
+    'operation_manager' => 'Operation Manager',
+    'accountant' => 'Accountant',
+    'team_member' => 'Team Member',
+  ];
+  $roleLabel = $roleLabels[$role] ?? ucwords(str_replace('_', ' ', $role));
   sendMail($config, $email, "You're invited to join {$companyName} on NexuxHR",
     renderEmailHtml("Welcome to {$companyName}", linkEmailHtml("You've been invited to join <strong>{$companyName}</strong> on NexuxHR as {$roleLabel}.", $link, 'Create My Account', "This invitation expires in {$days} days.")), true);
 

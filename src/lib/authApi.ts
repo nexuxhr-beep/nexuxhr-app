@@ -385,6 +385,14 @@ export async function updateCompanyStatus(
   return callAuthApi("update_company_status", { companyId, status });
 }
 
+
+export async function deleteCompany(
+  companyId: number,
+  confirmationName: string,
+): Promise<{ success: boolean; message: string }> {
+  return callAuthApi("delete_company", { companyId, confirmationName });
+}
+
 // ---------------------------------------------------------------------------
 // Leave requests
 // ---------------------------------------------------------------------------

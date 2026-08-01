@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useHR } from '../../context/HRContext';
 import { UserRole } from '../../types';
 import { Logo } from '../common/Logo';
-import { adToBs, formatBsNepali, formatNepaliTime, nepaliWeekday } from '../../lib/nepaliDate';
+import { adToBs, BS_MONTHS_EN } from '../../lib/nepaliDate';
 import {
   Bell,
   Building2,
@@ -57,18 +57,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenInviteModal, onLogout }) =
   const currentRoleBadge = roleBadges[activeRole];
 
   return (
-    <header id="nexuxhr-app-header" className="glass-header app-header-modern z-20 text-slate-900">
+    <header id="nexuxhr-app-header" className="app-header-modern z-20 text-slate-900 nx-page-enter">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <Logo size="md" />
 
-        <div className="glass-card hidden items-center gap-3 rounded-xl border border-slate-900/10 px-4 py-1.5 md:flex">
+        <div className="nx-surface hidden items-center gap-3 rounded-xl border border-slate-900/10 px-4 py-1.5 md:flex">
           <Clock className="h-4 w-4 shrink-0 text-indigo-500" />
-          <div className="nx-nepali-datetime leading-tight">
+          <div className="leading-tight tabular-nums">
             <div className="text-[13px] font-semibold text-slate-800">
-              {formatBsNepali(adToBs(time))}
+              {(() => { const bs = adToBs(time); return `${bs.day} ${BS_MONTHS_EN[bs.month - 1]} ${bs.year}`; })()}
             </div>
             <div className="text-[11px] text-slate-500">
-              {nepaliWeekday(time)} &middot; {formatNepaliTime(time)}
+              {time.toLocaleDateString('en-US', { weekday: 'long' })} &middot; {time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}
             </div>
           </div>
           <div className="ml-1 hidden border-l border-slate-900/10 pl-3 text-[10px] leading-tight text-slate-400 lg:block">
@@ -86,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenInviteModal, onLogout }) =
             <button
               id="notifications-button"
               onClick={toggleNotifications}
-              className="glass-card relative rounded-xl p-2 text-slate-500 transition hover:text-slate-900"
+              className="nx-icon-button relative rounded-xl p-2 text-slate-500 transition hover:text-slate-900"
               aria-label="Open notifications"
             >
               <Bell className="h-4 w-4" />
@@ -132,7 +132,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenInviteModal, onLogout }) =
           </div>
 
           {(activeRole === 'admin' || activeRole === 'hr_manager') && (
-            <button id="invite-team-btn" onClick={onOpenInviteModal} className="glass-btn-primary hidden items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-medium text-white shadow-md sm:flex">
+            <button id="invite-team-btn" onClick={onOpenInviteModal} className="nx-primary-button hidden items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-medium text-white shadow-md sm:flex">
               <User className="h-3.5 w-3.5" /> Invite Team
             </button>
           )}
@@ -151,7 +151,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenInviteModal, onLogout }) =
             </div>
           </div>
 
-          <button id="sign-out-btn" onClick={onLogout} title="Sign out" className="glass-card rounded-xl p-2 text-slate-600 transition hover:text-red-700">
+          <button id="sign-out-btn" onClick={onLogout} title="Sign out" className="nx-icon-button rounded-xl p-2 text-slate-600 transition hover:text-red-700">
             <LogOut className="h-4 w-4" />
           </button>
         </div>

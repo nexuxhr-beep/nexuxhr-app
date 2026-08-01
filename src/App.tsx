@@ -46,7 +46,7 @@ const MainAppContent: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-200 selection:text-indigo-900">
+    <div className="nx-app-shell min-h-screen text-slate-900 flex flex-col font-sans selection:bg-indigo-200 selection:text-indigo-900">
       
       {/* Top Header Navigation */}
       <Header onOpenInviteModal={() => setShowInviteModal(true)} onLogout={onLogout} />
@@ -58,7 +58,7 @@ const MainAppContent: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
         {/* Dynamic Main Dashboard View Area */}
-        <main id="nexuxhr-main-content" className="flex-1 p-6 overflow-x-hidden min-w-0">
+        <main id="nexuxhr-main-content" className="nx-page-enter flex-1 p-6 overflow-x-hidden min-w-0">
           {renderActiveDashboard()}
         </main>
 

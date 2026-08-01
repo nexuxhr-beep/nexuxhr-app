@@ -7,7 +7,7 @@ import { EmployeeProfileForm } from '../common/EmployeeProfileForm';
 import { AssetRenewalCell } from '../common/AssetRenewalCell';
 import { AddAssetModal } from '../admin/AddAssetModal';
 import { AssetDetailModal } from '../admin/AssetDetailModal';
-import { adToBs, bsMonthIsoRange, bsMonthKeyLabel, currentBsMonthKey, formatBsNepali } from '../../lib/nepaliDate';
+import { adToBs, bsMonthIsoRange, bsMonthKeyLabel, currentBsMonthKey, BS_MONTHS_EN } from '../../lib/nepaliDate';
 
 interface RoleDashboardProps {
   activeTab: string;
@@ -71,8 +71,8 @@ const AssetsRegister: React.FC = () => {
                 </td>
                 <td className="p-3">
                   <div className="text-slate-700">{asset.issuedDate}</div>
-                  <div className="nx-nepali text-[10px] text-slate-400">
-                    {asset.issuedDate ? formatBsNepali(adToBs(asset.issuedDate)) : ''}
+                  <div className="text-[10px] text-slate-400">
+                    {asset.issuedDate ? (() => { const bs = adToBs(asset.issuedDate); return `${bs.day} ${BS_MONTHS_EN[bs.month - 1]} ${bs.year}`; })() : ''}
                   </div>
                 </td>
                 <td className="p-3">
@@ -123,7 +123,7 @@ const RoleHome: React.FC<{ title: string; subtitle: string; accent: string }> = 
           {currentUser.companyName || 'Company'}
         </h2>
         <p className="text-sm text-slate-600">{subtitle}</p>
-        <p className="nx-nepali mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-slate-500">
           {bsMonthKeyLabel(monthKey)} &middot; {range.startIso} → {range.endIso}
         </p>
       </div>

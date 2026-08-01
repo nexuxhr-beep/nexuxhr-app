@@ -45,6 +45,7 @@ import {
   createNoticeApi,
   createTaskApi,
   deleteInvitation as deleteInvitationRequest,
+  deleteCompany as deleteCompanyRequest,
   deleteNoticeApi,
   deleteTaskApi,
   getAssetDetail as getAssetDetailRequest,
@@ -176,6 +177,7 @@ interface HRContextType {
 
   createCompanyAndInviteAdmin: (companyName: string, adminEmail: string) => Promise<{ code: string; companyId: number }>;
   setCompanyStatus: (companyId: number, status: 'active' | 'suspended') => Promise<void>;
+  deleteCompany: (companyId: number, confirmationName: string) => Promise<void>;
 
   logAuditAction: (action: string, details: string) => void;
   refreshPhase2Data: () => Promise<void>;
@@ -833,6 +835,12 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, status } : c));
   };
 
+
+  const deleteCompany = async (companyId: number, confirmationName: string) => {
+    await deleteCompanyRequest(companyId, confirmationName);
+    setCompanies(prev => prev.filter(c => c.id !== companyId));
+  };
+
   const unreadNotificationCount = notifications.filter(n => !n.isRead).length;
 
   return (
@@ -852,7 +860,7 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       getEmployeeProfileAction, saveEmployeeProfileAction, deleteEmployeeDocumentAction, saveContractAction,
       createInvitation, deleteInvitationAction, verifyOtpAndCompleteSignup,
       addOrganization, updateOrganizationStatus, updateOrganizationPlan,
-      createCompanyAndInviteAdmin, setCompanyStatus,
+      createCompanyAndInviteAdmin, setCompanyStatus, deleteCompany,
       logAuditAction, refreshPhase2Data,
     }}>
       {children}

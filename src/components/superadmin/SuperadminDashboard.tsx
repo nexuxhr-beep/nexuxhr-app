@@ -12,7 +12,8 @@ import {
   TrendingUp,
   CreditCard,
   Crown,
-  Users
+  Users,
+  Trash2
 } from 'lucide-react';
 
 interface SuperadminDashboardProps {
@@ -26,7 +27,8 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
     updateOrganizationPlan,
     companies,
     createCompanyAndInviteAdmin,
-    setCompanyStatus
+    setCompanyStatus,
+    deleteCompany
   } = useHR();
 
   // Real company + admin invite
@@ -54,11 +56,32 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
     }
   };
 
+  const handleDeleteCompany = async (companyId: number, companyName: string) => {
+    const typed = window.prompt(
+      `This permanently deletes ${companyName} and its tenant data.\n\nType the company name exactly to continue:`,
+    );
+    if (typed === null) return;
+    if (typed.trim() !== companyName) {
+      setCompanyError('Company name confirmation did not match.');
+      return;
+    }
+    const confirmed = window.confirm(`Permanently delete ${companyName}? This cannot be undone.`);
+    if (!confirmed) return;
+    setCompanyError('');
+    setCompanyMessage('');
+    try {
+      await deleteCompany(companyId, typed.trim());
+      setCompanyMessage(`${companyName} was permanently deleted.`);
+    } catch (err: any) {
+      setCompanyError(err.message || 'Could not delete the company.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       
       {/* Top Banner */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-purple-50 via-white to-white border border-purple-200 flex items-center justify-between">
+      <div className="nx-surface nx-page-enter flex items-center justify-between rounded-2xl p-6">
         <div>
           <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-700 border border-purple-500/30">
             Superadmin Control Plane
@@ -67,7 +90,7 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
           <p className="text-sm text-slate-600">Oversee all customer organizations, tier subscriptions, and system audit logs</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="px-3 py-1.5 rounded-xl bg-purple-600/30 border border-purple-500/40 text-purple-700 font-bold text-xs flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700">
             <Crown className="w-4 h-4 text-purple-400" /> Superadmin Granted
           </span>
         </div>
@@ -127,7 +150,7 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
                 <p className="text-xs text-slate-500 italic">No companies created yet.</p>
               )}
               {companies.map(co => (
-                <div key={co.id} className="p-4 rounded-xl bg-slate-100/80 border border-slate-200 space-y-3 text-xs transition-all duration-200 hover:border-slate-600 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20">
+                <div key={co.id} className="nx-company-card space-y-3 rounded-xl p-4 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-purple-400 font-bold">{co.code}</span>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -149,16 +172,27 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
                     <span className="text-slate-500">{co.employeeCount} employees</span>
                   </div>
 
-                  <button
-                    onClick={() => setCompanyStatus(co.id, co.status === 'active' ? 'suspended' : 'active')}
-                    className={`w-full py-1.5 rounded-lg font-bold transition-colors border ${
-                      co.status === 'active'
-                        ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                    }`}
-                  >
-                    {co.status === 'active' ? 'Suspend Access' : 'Reactivate Access'}
-                  </button>
+                  <div className="grid grid-cols-[1fr_auto] gap-2">
+                    <button
+                      onClick={() => setCompanyStatus(co.id, co.status === 'active' ? 'suspended' : 'active')}
+                      className={`rounded-lg border px-3 py-2 font-bold transition ${
+                        co.status === 'active'
+                          ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                          : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                      }`}
+                    >
+                      {co.status === 'active' ? 'Suspend access' : 'Reactivate access'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteCompany(co.id, co.name)}
+                      className="nx-icon-button text-rose-600 hover:border-rose-200 hover:bg-rose-50"
+                      title={`Delete ${co.name}`}
+                      aria-label={`Delete ${co.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -217,8 +251,9 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
                   <th className="p-3">Feature Module</th>
                   <th className="p-3 text-purple-400 font-bold">Superadmin</th>
                   <th className="p-3 text-blue-400 font-bold">Admin</th>
-                  <th className="p-3 text-emerald-400 font-bold">HR Manager</th>
-                  <th className="p-3 text-amber-400 font-bold">Team Member</th>
+                  <th className="p-3 text-emerald-600 font-bold">HR Manager</th>
+                  <th className="p-3 text-cyan-600 font-bold">Operation Manager</th>
+                  <th className="p-3 text-amber-600 font-bold">Team Member</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 font-mono">
@@ -228,27 +263,31 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
                   <td className="p-3 text-slate-500">Denied</td>
                   <td className="p-3 text-slate-500">Denied</td>
                   <td className="p-3 text-slate-500">Denied</td>
+                  <td className="p-3 text-slate-500">Denied</td>
                 </tr>
                 <tr className="hover:bg-slate-100/40 transition-colors">
                   <td className="p-3 font-sans font-bold text-slate-900">Employee Invitation Links & Pos Mgmt</td>
                   <td className="p-3 text-emerald-400">Allowed</td>
                   <td className="p-3 text-emerald-400">Full Control</td>
-                  <td className="p-3 text-emerald-400">Entry Only</td>
+                  <td className="p-3 text-emerald-600">Entry Only</td>
+                  <td className="p-3 text-slate-500">Denied</td>
                   <td className="p-3 text-slate-500">Denied</td>
                 </tr>
                 <tr className="hover:bg-slate-100/40 transition-colors">
                   <td className="p-3 font-sans font-bold text-slate-900">Leave Approvals & Rejections</td>
                   <td className="p-3 text-emerald-400">Allowed</td>
                   <td className="p-3 text-emerald-400">Full Control</td>
-                  <td className="p-3 text-emerald-400">Full Control</td>
+                  <td className="p-3 text-emerald-600">Full Control</td>
+                  <td className="p-3 text-slate-500">View own only</td>
                   <td className="p-3 text-slate-500">Submit Request</td>
                 </tr>
                 <tr className="hover:bg-slate-100/40 transition-colors">
                   <td className="p-3 font-sans font-bold text-slate-900">Report Generation (Contracts/Salary)</td>
                   <td className="p-3 text-emerald-400">Allowed</td>
                   <td className="p-3 text-emerald-400">Full Control</td>
-                  <td className="p-3 text-emerald-400">Full Control</td>
-                  <td className="p-3 text-slate-500">View Own Slip</td>
+                  <td className="p-3 text-emerald-600">Full Control</td>
+                  <td className="p-3 text-slate-500">Denied</td>
+                  <td className="p-3 text-slate-500">View own documents</td>
                 </tr>
               </tbody>
             </table>
