@@ -19,18 +19,7 @@ import {
   UserProfile,
   UserRole,
 } from '../types';
-import {
-  INITIAL_ATTENDANCE,
-  INITIAL_AUDIT_LOGS,
-  INITIAL_CONTRACTS,
-  INITIAL_INVITATIONS,
-  INITIAL_LEAVES,
-  INITIAL_NOTICES,
-  INITIAL_ORGANIZATIONS,
-  INITIAL_SALARY_SLIPS,
-  INITIAL_USERS,
-} from '../data/mockData';
-import { getStoredData, saveStoredData } from '../lib/storage';
+import { INITIAL_SALARY_SLIPS } from '../data/mockData';
 import {
   AssetDetail,
   AssetListItem,
@@ -95,6 +84,7 @@ type ServerAuthUser = {
   department?: string;
   companyId?: number | null;
   companyName?: string | null;
+  profileSetupComplete?: boolean;
 };
 
 interface HRContextType {
@@ -188,8 +178,9 @@ const HRContext = createContext<HRContextType | undefined>(undefined);
 const today = () => new Date().toISOString().split('T')[0];
 
 export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [users, setUsers] = useState<UserProfile[]>(() => getStoredData('users', INITIAL_USERS));
-  const [organizations, setOrganizations] = useState<Organization[]>(() => getStoredData('orgs', INITIAL_ORGANIZATIONS));
+  // Server-owned production data must never fall back to demo/local accounts.
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -199,7 +190,7 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [assets, setAssets] = useState<AssetListItem[]>([]);
   const [employeeProfiles, setEmployeeProfiles] = useState<EmployeeProfileDetails[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [invitations, setInvitations] = useState<Invitation[]>(() => getStoredData('invitations', INITIAL_INVITATIONS));
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [salarySlips] = useState<SalarySlip[]>(INITIAL_SALARY_SLIPS);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -213,9 +204,6 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     createdAt: '',
   });
 
-  useEffect(() => { saveStoredData('users', users); }, [users]);
-  useEffect(() => { saveStoredData('orgs', organizations); }, [organizations]);
-  useEffect(() => { saveStoredData('invitations', invitations); }, [invitations]);
 
   const logAuditAction = useCallback((action: string, details: string) => {
     setAuditLogs(prev => [{
@@ -269,6 +257,7 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       department: authUser.department || existing?.department,
       companyId: authUser.companyId == null ? undefined : String(authUser.companyId),
       companyName: authUser.companyName || existing?.companyName,
+      profileSetupComplete: authUser.profileSetupComplete,
       isActive: true,
       createdAt: existing?.createdAt || today(),
     };
@@ -281,10 +270,22 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const clearSession = () => {
     setCurrentUser({ id: 'unauthenticated', email: '', name: '', role: 'team_member', isActive: true, createdAt: '' });
     setActiveRole('team_member');
+    // Clear every account/tenant-scoped collection so switching accounts cannot
+    // briefly expose data from the previous session.
+    setUsers([]);
+    setOrganizations([]);
+    setAttendanceRecords([]);
+    setLeaveRequests([]);
     setTasks([]);
     setEmployeeRequests([]);
     setNotifications([]);
-    setAttendanceRecords([]);
+    setNotices([]);
+    setAssets([]);
+    setEmployeeProfiles([]);
+    setContracts([]);
+    setInvitations([]);
+    setAuditLogs([]);
+    setCompanies([]);
   };
 
   const updateCurrentUserProfile = (updated: Partial<UserProfile>) => {
@@ -533,6 +534,25 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   const refreshPhase2Data = useCallback(async () => {
     if (currentUser.id === 'unauthenticated') return;
+
+    // Superadmin is global and intentionally has no company_id. Calling every
+    // company-scoped endpoint for that account caused the repeating HTTP 400s
+    // visible in DevTools (tasks, attendance, notifications, requests, etc.).
+    if (currentUser.role === 'superadmin') {
+      await Promise.allSettled([
+        refreshUsers(),
+        refreshAuditLogs(),
+      ]);
+      return;
+    }
+
+    // A non-superadmin without a tenant assignment cannot load tenant data.
+    // Keep the current account visible, but do not hammer protected endpoints.
+    if (!currentUser.companyId) {
+      await Promise.allSettled([refreshUsers()]);
+      return;
+    }
+
     await Promise.allSettled([
       refreshUsers(),
       refreshTasks(),
@@ -546,12 +566,12 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       refreshLeaveRequests(),
       refreshNotices(),
     ]);
-  }, [currentUser.id, refreshAssets, refreshAttendance, refreshAuditLogs, refreshContracts, refreshEmployeeProfiles, refreshLeaveRequests, refreshNotices, refreshNotifications, refreshRequests, refreshTasks, refreshUsers]);
+  }, [currentUser.companyId, currentUser.id, currentUser.role, refreshAssets, refreshAttendance, refreshAuditLogs, refreshContracts, refreshEmployeeProfiles, refreshLeaveRequests, refreshNotices, refreshNotifications, refreshRequests, refreshTasks, refreshUsers]);
 
   useEffect(() => {
     if (currentUser.id === 'unauthenticated') return;
-    refreshPhase2Data();
-    const timer = window.setInterval(refreshPhase2Data, 12000);
+    void refreshPhase2Data();
+    const timer = window.setInterval(() => { void refreshPhase2Data(); }, 60000);
     return () => window.clearInterval(timer);
   }, [currentUser.id, refreshPhase2Data]);
 

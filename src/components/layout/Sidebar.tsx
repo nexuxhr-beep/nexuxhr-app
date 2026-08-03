@@ -36,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
           { id: 'orgs', label: 'Organizations & Clients', icon: <Building2 className="w-4 h-4" /> },
           { id: 'subscriptions', label: 'Subscriptions & Billing', icon: <Receipt className="w-4 h-4" /> },
           { id: 'roles_permissions', label: 'Role & Permission Matrix', icon: <ShieldAlert className="w-4 h-4" /> },
+          { id: 'all_users', label: 'All Users', icon: <Users className="w-4 h-4" /> },
           { id: 'audit_logs', label: 'System Audit Logs', icon: <FileSpreadsheet className="w-4 h-4" /> },
         ];
 

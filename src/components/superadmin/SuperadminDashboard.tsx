@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import { Company } from '../../lib/authApi';
+import { AllUsersPanel } from './AllUsersPanel';
+import { DeleteCompanyModal } from './DeleteCompanyModal';
 import { useHR } from '../../context/HRContext';
 import { Organization } from '../../types';
 import {
@@ -37,6 +40,9 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
   const [companySending, setCompanySending] = useState(false);
   const [companyError, setCompanyError] = useState('');
   const [companyMessage, setCompanyMessage] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const handleCreateCompanyInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,24 +62,25 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
     }
   };
 
-  const handleDeleteCompany = async (companyId: number, companyName: string) => {
-    const typed = window.prompt(
-      `This permanently deletes ${companyName} and its tenant data.\n\nType the company name exactly to continue:`,
-    );
-    if (typed === null) return;
-    if (typed.trim() !== companyName) {
-      setCompanyError('Company name confirmation did not match.');
-      return;
-    }
-    const confirmed = window.confirm(`Permanently delete ${companyName}? This cannot be undone.`);
-    if (!confirmed) return;
+  const openDeleteCompany = (company: Company) => {
+    setDeleteError('');
+    setDeleteTarget(company);
+  };
+
+  const handleDeleteCompany = async (confirmationName: string) => {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    setDeleteError('');
     setCompanyError('');
     setCompanyMessage('');
     try {
-      await deleteCompany(companyId, typed.trim());
-      setCompanyMessage(`${companyName} was permanently deleted.`);
-    } catch (err: any) {
-      setCompanyError(err.message || 'Could not delete the company.');
+      await deleteCompany(deleteTarget.id, confirmationName);
+      setCompanyMessage(`${deleteTarget.name} was permanently deleted.`);
+      setDeleteTarget(null);
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : 'Could not delete the company.');
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -185,7 +192,7 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
                     </button>
                     <button
                       type="button"
-                      onClick={() => void handleDeleteCompany(co.id, co.name)}
+                      onClick={() => openDeleteCompany(co)}
                       className="nx-icon-button text-rose-600 hover:border-rose-200 hover:bg-rose-50"
                       title={`Delete ${co.name}`}
                       aria-label={`Delete ${co.name}`}
@@ -295,7 +302,11 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
         </div>
       )}
 
-      {/* 4. AUDIT LOGS TAB */}
+
+      {/* 4. ALL USERS TAB */}
+      {activeTab === 'all_users' && <AllUsersPanel />}
+
+      {/* 5. AUDIT LOGS TAB */}
       {activeTab === 'audit_logs' && (
         <div className="p-6 rounded-2xl bg-white border border-slate-200 space-y-4">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -316,6 +327,16 @@ export const SuperadminDashboard: React.FC<SuperadminDashboardProps> = ({ active
             ))}
           </div>
         </div>
+      )}
+
+      {deleteTarget && (
+        <DeleteCompanyModal
+          company={deleteTarget}
+          deleting={deleteBusy}
+          error={deleteError}
+          onCancel={() => { if (!deleteBusy) setDeleteTarget(null); }}
+          onConfirm={handleDeleteCompany}
+        />
       )}
 
     </div>
